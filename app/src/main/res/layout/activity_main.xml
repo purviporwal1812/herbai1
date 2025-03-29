@@ -19,9 +19,19 @@
         android:id="@+id/selectButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Select Image"
+        android:text="Select Image from Gallery"
         android:backgroundTint="@color/teal_700"
-        android:textColor="@color/white"/>
+        android:textColor="@color/white"
+        android:layout_marginBottom="10dp"/>
+
+    <Button
+        android:id="@+id/cameraButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Capture Image"
+        android:backgroundTint="@color/purple_500"
+        android:textColor="@color/white"
+        android:layout_marginBottom="10dp"/>
 
     <Button
         android:id="@+id/uploadButton"
