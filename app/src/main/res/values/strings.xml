@@ -1,0 +1,5 @@
+<resources>
+    <string name="select_from_gallery">Select from Gallery</string>
+    <string name="scan_with_camera">Scan with Camera</string>
+    <string name="image_desc">Selected plant image</string>
+</resources>
