@@ -7,9 +7,13 @@ import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
-import java.util.Arrays;
+
 public class ResultActivity extends AppCompatActivity {
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -18,20 +22,25 @@ public class ResultActivity extends AppCompatActivity {
         ListView plantListView = findViewById(R.id.plantListView);
         TextView plantUsesTextView = findViewById(R.id.plantUsesTextView);
 
-        // Dummy JSON object with probable plant names and uses
-        ArrayList<String> probablePlants = new ArrayList<>(Arrays.asList(
-                "Tulsi",
-                "Neem",
-                "Aloe Vera"
-        ));
-        String topPlantUses = "Aloe Vera is used for skin treatment, digestion improvement, and healing wounds.";
+        String response = getIntent().getStringExtra("apiResponse");
 
-        // Display plant names in ListView
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, probablePlants);
-        plantListView.setAdapter(adapter);
+        try {
+            JSONObject jsonResponse = new JSONObject(response);
+            JSONArray probablePlantsArray = jsonResponse.getJSONArray("probablePlants");
+            String topPlantUses = jsonResponse.getString("topPlantUses");
 
-        // Show uses of the top probable plant
-        plantUsesTextView.setText("Top Plant Uses:\n" + topPlantUses);
+            ArrayList<String> probablePlants = new ArrayList<>();
+            for (int i = 0; i < probablePlantsArray.length(); i++) {
+                probablePlants.add(probablePlantsArray.getString(i));
+            }
 
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, probablePlants);
+            plantListView.setAdapter(adapter);
+
+            plantUsesTextView.setText("Top Plant Uses:\n" + topPlantUses);
+        } catch (Exception e) {
+            e.printStackTrace();
+            plantUsesTextView.setText("Error processing results");
+        }
     }
 }
