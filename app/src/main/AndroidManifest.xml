@@ -2,6 +2,8 @@
     package="com.example.herbai">
 
     <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
 
@@ -17,6 +19,8 @@
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="com.example.herbai.fileprovider"
+            android:usesCleartextTraffic="true"
+            android:networkSecurityConfig="@xml/network_security_config"
             android:grantUriPermissions="true"
             android:exported="false">
             <meta-data
