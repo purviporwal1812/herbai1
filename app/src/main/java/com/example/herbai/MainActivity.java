@@ -27,6 +27,8 @@ import androidx.core.content.FileProvider;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -123,11 +125,36 @@ public class MainActivity extends AppCompatActivity {
 
     private void uploadImage() {
         if (imageUri != null || imageView.getDrawable() != null) {
-            Toast.makeText(this, "Image uploaded successfully!", Toast.LENGTH_SHORT).show();
+            // Dummy JSON data
+            ArrayList<String> probablePlants = new ArrayList<>(Arrays.asList(
+                    "Tulsi",
+                    "Neem",
+                    "Aloe Vera"
+            ));
+            String topPlantUses = "Aloe Vera is used for skin treatment, digestion improvement, and healing wounds.";
+
+            // Start ResultActivity and pass data
+            Intent intent = new Intent(MainActivity.this, ResultActivity.class);
+            intent.putStringArrayListExtra("probablePlants", probablePlants);
+            intent.putExtra("topPlantUses", topPlantUses);
+            startActivity(intent);
         } else {
+            ArrayList<String> probablePlants = new ArrayList<>(Arrays.asList(
+                    "Tulsi",
+                    "Neem",
+                    "Aloe Vera"
+            ));
+            String topPlantUses = "Aloe Vera is used for skin treatment, digestion improvement, and healing wounds.";
+
+            // Start ResultActivity and pass data
+            Intent intent = new Intent(MainActivity.this, ResultActivity.class);
+            intent.putStringArrayListExtra("probablePlants", probablePlants);
+            intent.putExtra("topPlantUses", topPlantUses);
+            startActivity(intent);
             Toast.makeText(this, "Please select or capture an image first!", Toast.LENGTH_SHORT).show();
         }
     }
+
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
