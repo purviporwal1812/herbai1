@@ -3,6 +3,7 @@ package com.example.herbai;
 import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.ImageDecoder;
@@ -16,14 +17,16 @@ import android.widget.ImageView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResult;
-import androidx.activity.result.ActivityResultCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
+
+import com.google.android.material.materialswitch.MaterialSwitch;
 
 import java.io.File;
 import java.io.IOException;
@@ -31,7 +34,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 public class MainActivity extends AppCompatActivity {
-
+    private MaterialSwitch themeSwitch;
+    private SharedPreferences sharedPreferences;
+    private static final String PREFS_NAME = "theme_prefs";
+    private static final String NIGHT_MODE = "night_mode";
     private ImageView imageView;
     private Uri imageUri;
     private Uri cameraImageUri;
@@ -41,14 +47,45 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
 
+        // Load saved preference and apply the theme mode
+        sharedPreferences = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        boolean isNightMode = sharedPreferences.getBoolean(NIGHT_MODE, false);
+        AppCompatDelegate.setDefaultNightMode(isNightMode ?
+                AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO);
+
+        setContentView(R.layout.activity_main);  // Only call this once
+
+        themeSwitch = findViewById(R.id.themeSwitch);
+
+        // Set the switch state according to saved preference
+        themeSwitch.setChecked(isNightMode);
+
+        // Listener for the theme toggle switch
+        themeSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            // Save the night mode preference in SharedPreferences
+            SharedPreferences.Editor editor = sharedPreferences.edit();
+            editor.putBoolean(NIGHT_MODE, isChecked);
+            editor.apply();
+
+            // Apply the new theme based on the switch state
+            if (isChecked) {
+                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
+            } else {
+                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
+            }
+
+            // Restart the activity to apply the theme change immediately
+            recreate();  // This will restart the activity to apply the new theme
+        });
+
+        // Initialize image-related UI components
         imageView = findViewById(R.id.imageView);
         Button selectButton = findViewById(R.id.selectButton);
         Button uploadButton = findViewById(R.id.uploadButton);
         Button cameraButton = findViewById(R.id.cameraButton);
 
-        // Request camera permission at runtime
+        // Request camera permission if needed
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 101);
         }
@@ -139,22 +176,9 @@ public class MainActivity extends AppCompatActivity {
             intent.putExtra("topPlantUses", topPlantUses);
             startActivity(intent);
         } else {
-            ArrayList<String> probablePlants = new ArrayList<>(Arrays.asList(
-                    "Tulsi",
-                    "Neem",
-                    "Aloe Vera"
-            ));
-            String topPlantUses = "Aloe Vera is used for skin treatment, digestion improvement, and healing wounds.";
-
-            // Start ResultActivity and pass data
-            Intent intent = new Intent(MainActivity.this, ResultActivity.class);
-            intent.putStringArrayListExtra("probablePlants", probablePlants);
-            intent.putExtra("topPlantUses", topPlantUses);
-            startActivity(intent);
             Toast.makeText(this, "Please select or capture an image first!", Toast.LENGTH_SHORT).show();
         }
     }
-
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {

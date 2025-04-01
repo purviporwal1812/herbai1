@@ -9,8 +9,8 @@
 
     <application
         android:allowBackup="true"
-        android:theme="@style/Theme.PlantApp"
-        android:label="Plant App"
+        android:theme="@style/Theme.HerbAi"
+        android:label="HerbAi"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:icon="@mipmap/ic_launcher">
 
@@ -35,5 +35,4 @@
         <activity android:name=".ResultActivity" />
 
     </application>
-
 </manifest>
