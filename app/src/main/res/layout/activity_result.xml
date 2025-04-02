@@ -6,18 +6,28 @@
     android:padding="16dp">
 
     <TextView
+        android:id="@+id/titleTextView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Most Probable Plants"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:paddingBottom="10dp" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/plantListView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:divider="@android:color/darker_gray"
+        android:dividerHeight="1dp" />
+
+    <TextView
         android:id="@+id/plantUsesTextView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Top Plant Uses:"
         android:textSize="18sp"
         android:textStyle="bold"
-        android:paddingBottom="10dp" />
+        android:paddingTop="10dp" />
 
-    <ListView
-        android:id="@+id/plantListView"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:divider="@android:color/darker_gray"
-        android:dividerHeight="1dp" />
 </LinearLayout>
