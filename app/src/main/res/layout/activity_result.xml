@@ -9,7 +9,7 @@
         android:id="@+id/titleTextView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Most Probable Plants"
+        android:text="Predictions"
         android:textSize="20sp"
         android:textStyle="bold"
         android:paddingBottom="10dp" />
@@ -17,10 +17,12 @@
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/plantListView"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        android:layout_height="0dp"
+        android:layout_weight="1"
         android:divider="@android:color/darker_gray"
         android:dividerHeight="1dp" />
 
+    <!-- Optional: if you still have uses to show -->
     <TextView
         android:id="@+id/plantUsesTextView"
         android:layout_width="match_parent"

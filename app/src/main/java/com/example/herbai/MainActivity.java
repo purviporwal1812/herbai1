@@ -44,6 +44,20 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.MultipartBody;
+import okhttp3.Response;
+import okhttp3.MediaType;
+import java.util.Locale;
+import org.json.JSONObject;
+import org.json.JSONArray;
+ import java.util.concurrent.TimeUnit;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.IOException;
 
 public class MainActivity extends AppCompatActivity {
     private MaterialSwitch themeSwitch;
@@ -352,7 +366,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void uploadImage() {
+    private void uploadImage1() {
         if (imageUri != null || imageView.getDrawable() != null) {
             // Show loading dialog
             loadingDialog.show();
@@ -360,38 +374,167 @@ public class MainActivity extends AppCompatActivity {
 
             // Process image on background thread
             executor.execute(() -> {
-                // Simulate network delay or processing time (3 seconds)
                 try {
-                    // This would be where you'd normally process the image or make API calls
-                    Thread.sleep(3000);
-                } catch (InterruptedException e) {
+                    // Open InputStream from the selected image URI
+                    InputStream inputStream = getContentResolver().openInputStream(imageUri);
+                    // Create a temporary file to upload
+                    File tempFile = File.createTempFile("upload", ".jpg", getCacheDir());
+                    FileOutputStream out = new FileOutputStream(tempFile);
+                    byte[] buffer = new byte[1024];
+                    int len;
+                    while ((len = inputStream.read(buffer)) != -1) {
+                        out.write(buffer, 0, len);
+                    }
+                    out.close();
+                    inputStream.close();
+
+                    // Build multipart request using OkHttp with timeout settings
+                    OkHttpClient client = new OkHttpClient.Builder()
+                            .connectTimeout(30, TimeUnit.SECONDS)
+                            .writeTimeout(30, TimeUnit.SECONDS)
+                            .readTimeout(30, TimeUnit.SECONDS)
+                            .build();
+
+                    RequestBody requestBody = new MultipartBody.Builder()
+                            .setType(MultipartBody.FORM)
+                            .addFormDataPart("file", tempFile.getName(),
+                                    RequestBody.create(tempFile, MediaType.parse("image/jpeg")))
+                            .build();
+
+                    Request request = new Request.Builder()
+                            .url("https://serverv1-1.onrender.com/predict")
+                            .post(requestBody)
+                            .build();
+
+                    // Execute the request and get the response
+                    Response response = client.newCall(request).execute();
+                    if (!response.isSuccessful())
+                        throw new IOException("Unexpected code " + response);
+
+                    String responseBody = response.body().string();
+
+                    // Parse the JSON response from the API
+                    JSONObject jsonResponse = new JSONObject(responseBody);
+
+                    // Parse the "top_predictions" array to get the probable plants
+                    JSONArray topPredictionsJson = jsonResponse.getJSONArray("top_predictions");
+                    ArrayList<String> probablePlants = new ArrayList<>();
+                    for (int i = 0; i < topPredictionsJson.length(); i++) {
+                        JSONObject prediction = topPredictionsJson.getJSONObject(i);
+                        probablePlants.add(prediction.getString("species"));
+                    }
+                    // Get the top species from the main response
+                    String predictedSpecies = jsonResponse.getString("species");
+
+                    // Update UI on main thread
+                    mainHandler.post(() -> {
+                        loadingDialog.dismiss();
+                        Intent intent = new Intent(MainActivity.this, ResultActivity.class);
+                        intent.putStringArrayListExtra("probablePlants", probablePlants);
+                        intent.putExtra("predictedSpecies", predictedSpecies);
+                        startActivity(intent);
+                    });
+                } catch (Exception e) {
                     e.printStackTrace();
+                    mainHandler.post(() -> {
+                        loadingDialog.dismiss();
+                        Toast.makeText(MainActivity.this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    });
                 }
-
-                // Dummy JSON data - in real app, this would come from your model or API
-                ArrayList<String> probablePlants = new ArrayList<>(Arrays.asList(
-                        "Tulsi",
-                        "Neem",
-                        "Aloe Vera"
-                ));
-                String topPlantUses = "Aloe Vera is used for skin treatment, digestion improvement, and healing wounds.";
-
-                // Update UI on main thread
-                mainHandler.post(() -> {
-                    // Dismiss loading dialog
-                    loadingDialog.dismiss();
-
-                    // Start ResultActivity and pass data
-                    Intent intent = new Intent(MainActivity.this, ResultActivity.class);
-                    intent.putStringArrayListExtra("probablePlants", probablePlants);
-                    intent.putExtra("topPlantUses", topPlantUses);
-                    startActivity(intent);
-                });
             });
         } else {
             Toast.makeText(this, "Please select or capture an image first!", Toast.LENGTH_SHORT).show();
         }
     }
+
+
+    private void uploadImage() {
+        if (imageUri != null || imageView.getDrawable() != null) {
+            loadingDialog.show();
+            loadingDialog.setLoadingText("Identifying plant...");
+
+            executor.execute(() -> {
+                try {
+                    // Copy the picked/captured image into a temp file
+                    InputStream inputStream = getContentResolver().openInputStream(imageUri);
+                    File tempFile = File.createTempFile("upload", ".jpg", getCacheDir());
+                    try (FileOutputStream out = new FileOutputStream(tempFile)) {
+                        byte[] buf = new byte[1024];
+                        int len;
+                        while ((len = inputStream.read(buf)) != -1) {
+                            out.write(buf, 0, len);
+                        }
+                    }
+                    inputStream.close();
+
+                    // Build OkHttp client & request
+                    OkHttpClient client = new OkHttpClient.Builder()
+                            .connectTimeout(30, TimeUnit.SECONDS)
+                            .writeTimeout(30, TimeUnit.SECONDS)
+                            .readTimeout(30, TimeUnit.SECONDS)
+                            .build();
+
+                    RequestBody requestBody = new MultipartBody.Builder()
+                            .setType(MultipartBody.FORM)
+                            .addFormDataPart(
+                                    "file",
+                                    tempFile.getName(),
+                                    RequestBody.create(tempFile, MediaType.parse("image/jpeg"))
+                            )
+                            .build();
+
+                    Request request = new Request.Builder()
+                            .url("https://serverv1-1.onrender.com/predict")
+                            .post(requestBody)
+                            .build();
+
+                    Response response = client.newCall(request).execute();
+                    if (!response.isSuccessful()) {
+                        throw new IOException("Unexpected code " + response);
+                    }
+
+                    String body = response.body().string();
+                    JSONObject json = new JSONObject(body);
+
+                    // Build a list of "SpeciesName (0.02)"
+                    JSONArray preds = json.getJSONArray("top_predictions");
+                    ArrayList<String> probablePlants = new ArrayList<>();
+                    for (int i = 0; i < preds.length(); i++) {
+                        JSONObject p = preds.getJSONObject(i);
+                        String name = p.getString("species");
+                        double conf = p.getDouble("confidence");
+                        // two decimal places
+                        String entry = String.format(Locale.getDefault(),
+                                "%s (%.4f)",
+                                name, conf*100);
+                        probablePlants.add(entry);
+                    }
+
+                    // Back on UI thread: dismiss & launch
+                    mainHandler.post(() -> {
+                        loadingDialog.dismiss();
+                        Intent intent = new Intent(MainActivity.this, ResultActivity.class);
+                        intent.putStringArrayListExtra("probablePlants", probablePlants);
+                        startActivity(intent);
+                    });
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    mainHandler.post(() -> {
+                        loadingDialog.dismiss();
+                        Toast.makeText(MainActivity.this,
+                                "Error: " + e.getMessage(),
+                                Toast.LENGTH_LONG).show();
+                    });
+                }
+            });
+        } else {
+            Toast.makeText(this,
+                    "Please select or capture an image first!",
+                    Toast.LENGTH_SHORT).show();
+        }
+    }
+
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {

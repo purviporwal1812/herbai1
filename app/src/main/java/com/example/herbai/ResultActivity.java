@@ -20,21 +20,22 @@ public class ResultActivity extends AppCompatActivity {
 
         plantRecyclerView.setLayoutManager(new LinearLayoutManager(this));
 
-        // Get data from intent
-        ArrayList<String> probablePlants = getIntent().getStringArrayListExtra("probablePlants");
-        String topPlantUses = getIntent().getStringExtra("topPlantUses");
+        // Receive the formatted list: ["Species (0.02)", ...]
+        ArrayList<String> probablePlants =
+                getIntent().getStringArrayListExtra("probablePlants");
 
-        // If no data received, use default values
-        if (probablePlants == null) {
+        if (probablePlants == null || probablePlants.isEmpty()) {
             probablePlants = new ArrayList<>();
             probablePlants.add("No plants identified");
         }
 
+        // (Optional) if you still want to show uses
+        String topPlantUses = getIntent().getStringExtra("topPlantUses");
         if (topPlantUses != null) {
             plantUsesTextView.setText(topPlantUses);
         }
 
-        // Set custom adapter
+        // Use your existing adapter
         PlantAdapter adapter = new PlantAdapter(this, probablePlants);
         plantRecyclerView.setAdapter(adapter);
     }
