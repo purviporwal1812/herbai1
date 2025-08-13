@@ -13,16 +13,11 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.MediaStore;
-import android.view.MotionEvent;
+import android.util.Log;
 import android.view.View;
-import android.view.animation.AlphaAnimation;
-import android.view.animation.Animation;
-import android.view.animation.AnimationSet;
-import android.view.animation.AnimationUtils;
-import android.view.animation.ScaleAnimation;
-import android.view.animation.TranslateAnimation;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
@@ -36,17 +31,33 @@ import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
-import com.google.android.material.materialswitch.MaterialSwitch;
+import com.google.android.material.switchmaterial.SwitchMaterial;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
 public class MainActivity extends AppCompatActivity {
-    private MaterialSwitch themeSwitch;
+    private static final String TAG = "MainActivity";
+    private SwitchMaterial themeSwitch;
     private SharedPreferences sharedPreferences;
     private static final String PREFS_NAME = "theme_prefs";
     private static final String NIGHT_MODE = "night_mode";
@@ -55,14 +66,21 @@ public class MainActivity extends AppCompatActivity {
     private Uri cameraImageUri;
     private ActivityResultLauncher<Intent> imagePickerLauncher;
     private ActivityResultLauncher<Intent> cameraLauncher;
+    private ActivityResultLauncher<String> requestPermissionLauncher;
     private LoadingDialog loadingDialog;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final Executor executor = Executors.newSingleThreadExecutor();
 
-    // FloatingActionButton variables
-    private FloatingActionButton mainFab, fab1, fab2, fab3;
-    private ConstraintLayout mainLayout;
-    private boolean isFabExpanded = false;
+    // Menu components
+    private FloatingActionButton menuFab;
+    private LinearLayout menuLayout;
+    private boolean isMenuVisible = false;
+
+    // Network client
+    private OkHttpClient client;
+
+    // Replace with your actual server URL
+    private static final String BASE_URL = "https://serverv1-1.onrender.com/";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -74,264 +92,227 @@ public class MainActivity extends AppCompatActivity {
         AppCompatDelegate.setDefaultNightMode(isNightMode ?
                 AppCompatDelegate.MODE_NIGHT_YES : AppCompatDelegate.MODE_NIGHT_NO);
 
-        setContentView(R.layout.activity_main);  // Only call this once
+        setContentView(R.layout.activity_main);
+
+        // Initialize network client
+        client = new OkHttpClient();
 
         // Initialize loading dialog
         loadingDialog = new LoadingDialog(this);
 
-        themeSwitch = findViewById(R.id.themeSwitch);
+        initializeViews();
+        setupPermissionLauncher();
+        setupImageLaunchers();
+        setupThemeSwitch();
+        setupButtons();
+        setupMenu();
+    }
 
-        // Set the switch state according to saved preference
+    private void initializeViews() {
+        themeSwitch = findViewById(R.id.themeSwitch);
+        imageView = findViewById(R.id.imageView);
+        menuFab = findViewById(R.id.menu_fab);
+        menuLayout = findViewById(R.id.menu_layout);
+    }
+
+    private void setupPermissionLauncher() {
+        requestPermissionLauncher = registerForActivityResult(
+                new ActivityResultContracts.RequestPermission(),
+                isGranted -> {
+                    if (isGranted) {
+                        Toast.makeText(this, "Camera permission granted!", Toast.LENGTH_SHORT).show();
+                    } else {
+                        Toast.makeText(this, "Camera permission denied!", Toast.LENGTH_SHORT).show();
+                    }
+                });
+    }
+
+    private void setupImageLaunchers() {
+        // Image Picker from Gallery
+        imagePickerLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    Log.d(TAG, "Gallery result: " + result.getResultCode());
+                    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+                        imageUri = result.getData().getData();
+                        if (imageUri != null) {
+                            displayImage(imageUri);
+                            Log.d(TAG, "Image selected from gallery: " + imageUri.toString());
+                        }
+                    }
+                });
+
+        // Capture Image using Camera
+        cameraLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    Log.d(TAG, "Camera result: " + result.getResultCode());
+                    if (result.getResultCode() == Activity.RESULT_OK) {
+                        if (cameraImageUri != null) {
+                            imageUri = cameraImageUri; // Set imageUri to the captured image
+                            displayImage(cameraImageUri);
+                            Log.d(TAG, "Image captured: " + cameraImageUri.toString());
+                        }
+                    }
+                });
+    }
+
+    private void setupThemeSwitch() {
+        boolean isNightMode = sharedPreferences.getBoolean(NIGHT_MODE, false);
         themeSwitch.setChecked(isNightMode);
 
-        // Listener for the theme toggle switch
         themeSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            // Save the night mode preference in SharedPreferences
             SharedPreferences.Editor editor = sharedPreferences.edit();
             editor.putBoolean(NIGHT_MODE, isChecked);
             editor.apply();
 
-            // Apply the new theme based on the switch state
             if (isChecked) {
                 AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES);
             } else {
                 AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO);
             }
-
-            // Restart the activity to apply the theme change immediately
-            recreate();  // This will restart the activity to apply the new theme
+            recreate();
         });
+    }
 
-        // Initialize image-related UI components
-        imageView = findViewById(R.id.imageView);
+    private void setupButtons() {
         Button selectButton = findViewById(R.id.selectButton);
         Button uploadButton = findViewById(R.id.uploadButton);
         Button cameraButton = findViewById(R.id.cameraButton);
 
-        // Request camera permission if needed
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 101);
-        }
-
-        // Image Picker from Gallery
-        imagePickerLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
-                result -> {
-                    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
-                        imageUri = result.getData().getData();
-                        displayImage(imageUri);
-                    }
-                });
-
-        // Capture Image using Camera
-        cameraLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(),
-                result -> {
-                    if (result.getResultCode() == Activity.RESULT_OK) {
-                        displayImage(cameraImageUri);
-                    }
-                });
-
         selectButton.setOnClickListener(v -> selectImage());
         cameraButton.setOnClickListener(v -> captureImage());
         uploadButton.setOnClickListener(v -> uploadImage());
-
-        // Initialize FAB components
-        initializeFAB();
     }
 
-    private void initializeFAB() {
-        // Initialize the FAB components
-        mainLayout = findViewById(R.id.main_layout);
-        mainFab = findViewById(R.id.main_fab);
-        fab1 = findViewById(R.id.fab_1);
-        fab2 = findViewById(R.id.fab_2);
-        fab3 = findViewById(R.id.fab_3);
+    private void setupMenu() {
+        menuFab.setOnClickListener(v -> toggleMenu());
 
-        // Set up click listeners for FABs
-        mainFab.setOnClickListener(view -> {
-            if (!isFabExpanded) {
-                expandFab();
-            } else {
-                collapseFab();
+        // Menu item buttons
+        Button plantSearchBtn = findViewById(R.id.menu_plant_search);
+        Button systemStatusBtn = findViewById(R.id.menu_system_status);
+        Button generateDataBtn = findViewById(R.id.menu_generate_data);
+        Button settingsBtn = findViewById(R.id.menu_settings);
+
+        plantSearchBtn.setOnClickListener(v -> {
+            startActivity(new Intent(MainActivity.this, PlantSearchActivity.class));
+            hideMenu();
+        });
+
+        systemStatusBtn.setOnClickListener(v -> {
+            startActivity(new Intent(MainActivity.this, ApiStatusActivity.class));
+            hideMenu();
+        });
+
+        generateDataBtn.setOnClickListener(v -> {
+            startActivity(new Intent(MainActivity.this, GenerateDataActivity.class));
+            hideMenu();
+        });
+
+        settingsBtn.setOnClickListener(v -> {
+            startActivity(new Intent(MainActivity.this, SettingsActivity.class));
+            hideMenu();
+        });
+
+        // Hide menu when clicking outside
+        ConstraintLayout mainLayout = findViewById(R.id.main_layout);
+        mainLayout.setOnClickListener(v -> {
+            if (isMenuVisible) {
+                hideMenu();
             }
-        });
-
-        // Set up click listeners for child FABs
-        fab1.setOnClickListener(view -> {
-            Toast.makeText(MainActivity.this, "Navigating to First Page", Toast.LENGTH_SHORT).show();
-            // Start FirstPage activity
-            Intent intent = new Intent(MainActivity.this, FirstPageActivity.class);
-            startActivity(intent);
-            collapseFab();
-        });
-
-        fab2.setOnClickListener(view -> {
-            Toast.makeText(MainActivity.this, "Navigating to Second Page", Toast.LENGTH_SHORT).show();
-            // Start SecondPage activity
-            Intent intent = new Intent(MainActivity.this, SecondPageActivity.class);
-            startActivity(intent);
-            collapseFab();
-        });
-
-        fab3.setOnClickListener(view -> {
-            Toast.makeText(MainActivity.this, "Navigating to Third Page", Toast.LENGTH_SHORT).show();
-            // Start ThirdPage activity
-            Intent intent = new Intent(MainActivity.this, ThirdPageActivity.class);
-            startActivity(intent);
-            collapseFab();
-        });
-
-        // Add touch listener to the main layout to detect clicks outside the FABs
-        mainLayout.setOnTouchListener((v, event) -> {
-            if (isFabExpanded && event.getAction() == MotionEvent.ACTION_DOWN) {
-                // Check if the touch is outside the main FAB
-                float x = event.getX();
-                float y = event.getY();
-                int[] location = new int[2];
-                mainFab.getLocationOnScreen(location);
-                int fabX = location[0];
-                int fabY = location[1];
-
-                // If touch outside the main FAB area, collapse
-                if (x < fabX || x > fabX + mainFab.getWidth() ||
-                        y < fabY || y > fabY + mainFab.getHeight()) {
-                    collapseFab();
-                    return true;
-                }
-            }
-            return false;
         });
     }
 
-    private void expandFab() {
-        // Set visibility and animations for child FABs
-        fab1.setVisibility(View.VISIBLE);
-        fab2.setVisibility(View.VISIBLE);
-        fab3.setVisibility(View.VISIBLE);
-
-        // Animate the child FABs to appear in a semicircle
-        // Create animations for each child FAB
-        Animation animation1 = createAnimation(fab1, -60f);  // Top-right
-        Animation animation2 = createAnimation(fab2, -120f); // Top-left
-        Animation animation3 = createAnimation(fab3, -90f);  // Directly above
-
-        // Start animations
-        fab1.startAnimation(animation1);
-        fab2.startAnimation(animation2);
-        fab3.startAnimation(animation3);
-
-        isFabExpanded = true;
+    private void toggleMenu() {
+        if (isMenuVisible) {
+            hideMenu();
+        } else {
+            showMenu();
+        }
     }
 
-    private void collapseFab() {
-        // Create animations to hide FABs
-        Animation hideAnimation1 = AnimationUtils.loadAnimation(this, R.anim.hide_fab);
-        Animation hideAnimation2 = AnimationUtils.loadAnimation(this, R.anim.hide_fab);
-        Animation hideAnimation3 = AnimationUtils.loadAnimation(this, R.anim.hide_fab);
+    private void showMenu() {
+        menuLayout.setVisibility(View.VISIBLE);
+        menuLayout.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(200)
+                .start();
 
-        hideAnimation1.setAnimationListener(new Animation.AnimationListener() {
-            @Override
-            public void onAnimationStart(Animation animation) {}
+        menuFab.animate()
+                .rotation(45f)
+                .setDuration(200)
+                .start();
 
-            @Override
-            public void onAnimationEnd(Animation animation) {
-                fab1.setVisibility(View.INVISIBLE);
-            }
-
-            @Override
-            public void onAnimationRepeat(Animation animation) {}
-        });
-
-        hideAnimation2.setAnimationListener(new Animation.AnimationListener() {
-            @Override
-            public void onAnimationStart(Animation animation) {}
-
-            @Override
-            public void onAnimationEnd(Animation animation) {
-                fab2.setVisibility(View.INVISIBLE);
-            }
-
-            @Override
-            public void onAnimationRepeat(Animation animation) {}
-        });
-
-        hideAnimation3.setAnimationListener(new Animation.AnimationListener() {
-            @Override
-            public void onAnimationStart(Animation animation) {}
-
-            @Override
-            public void onAnimationEnd(Animation animation) {
-                fab3.setVisibility(View.INVISIBLE);
-            }
-
-            @Override
-            public void onAnimationRepeat(Animation animation) {}
-        });
-
-        fab1.startAnimation(hideAnimation1);
-        fab2.startAnimation(hideAnimation2);
-        fab3.startAnimation(hideAnimation3);
-
-        isFabExpanded = false;
+        isMenuVisible = true;
     }
 
-    private Animation createAnimation(View view, float angle) {
-        // Create custom animation for the specified angle
-        AnimationSet animationSet = new AnimationSet(true);
+    private void hideMenu() {
+        menuLayout.animate()
+                .alpha(0f)
+                .translationY(50f)
+                .setDuration(200)
+                .withEndAction(() -> menuLayout.setVisibility(View.GONE))
+                .start();
 
-        // Translate animation
-        float endX = (float) (100 * Math.cos(Math.toRadians(angle)));
-        float endY = (float) (100 * Math.sin(Math.toRadians(angle)));
+        menuFab.animate()
+                .rotation(0f)
+                .setDuration(200)
+                .start();
 
-        TranslateAnimation translateAnimation = new TranslateAnimation(0, endX, 0, endY);
-        translateAnimation.setDuration(300);
-        translateAnimation.setFillAfter(true);
-
-        // Alpha animation
-        AlphaAnimation alphaAnimation = new AlphaAnimation(0f, 1f);
-        alphaAnimation.setDuration(300);
-        alphaAnimation.setFillAfter(true);
-
-        // Scale animation
-        ScaleAnimation scaleAnimation = new ScaleAnimation(0f, 1f, 0f, 1f,
-                Animation.RELATIVE_TO_SELF, 0.5f, Animation.RELATIVE_TO_SELF, 0.5f);
-        scaleAnimation.setDuration(300);
-        scaleAnimation.setFillAfter(true);
-
-        animationSet.addAnimation(translateAnimation);
-        animationSet.addAnimation(alphaAnimation);
-        animationSet.addAnimation(scaleAnimation);
-
-        return animationSet;
+        isMenuVisible = false;
     }
 
     private void selectImage() {
-        Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-        imagePickerLauncher.launch(intent);
+        try {
+            Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+            intent.setType("image/*");
+            imagePickerLauncher.launch(intent);
+            Log.d(TAG, "Gallery intent launched");
+        } catch (Exception e) {
+            Log.e(TAG, "Error launching gallery: " + e.getMessage());
+            Toast.makeText(this, "Error opening gallery: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 
     private void captureImage() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(this, "Camera permission required!", Toast.LENGTH_SHORT).show();
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, 101);
+            requestPermissionLauncher.launch(Manifest.permission.CAMERA);
             return;
         }
 
         try {
-            File imageFile = new File(getExternalFilesDir("Pictures"), "captured_image.jpg");
+            // Create the image file
+            File imageFile = new File(getExternalFilesDir("Pictures"), "captured_image_" + System.currentTimeMillis() + ".jpg");
+
+            // Create directories if they don't exist
+            File parentDir = imageFile.getParentFile();
+            if (parentDir != null && !parentDir.exists()) {
+                parentDir.mkdirs();
+            }
+
+            // Create the file
             if (!imageFile.exists()) {
                 imageFile.createNewFile();
             }
 
             cameraImageUri = FileProvider.getUriForFile(this, "com.example.herbai.fileprovider", imageFile);
+
             Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
             intent.putExtra(MediaStore.EXTRA_OUTPUT, cameraImageUri);
 
+            // Grant URI permission
+            intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
             if (intent.resolveActivity(getPackageManager()) != null) {
                 cameraLauncher.launch(intent);
+                Log.d(TAG, "Camera intent launched, URI: " + cameraImageUri.toString());
             } else {
                 Toast.makeText(this, "No camera app found", Toast.LENGTH_SHORT).show();
             }
         } catch (Exception e) {
+            Log.e(TAG, "Error capturing image: " + e.getMessage());
             e.printStackTrace();
             Toast.makeText(this, "Error capturing image: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
@@ -339,6 +320,11 @@ public class MainActivity extends AppCompatActivity {
 
     private void displayImage(Uri uri) {
         try {
+            if (uri == null) {
+                Log.e(TAG, "URI is null");
+                return;
+            }
+
             Bitmap bitmap;
             if (Build.VERSION.SDK_INT >= 29) {
                 ImageDecoder.Source source = ImageDecoder.createSource(getContentResolver(), uri);
@@ -346,50 +332,228 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), uri);
             }
+
             imageView.setImageBitmap(bitmap);
-        } catch (IOException e) {
+            Log.d(TAG, "Image displayed successfully");
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error displaying image: " + e.getMessage());
             e.printStackTrace();
+            Toast.makeText(this, "Error displaying image: " + e.getMessage(), Toast.LENGTH_SHORT).show();
         }
     }
 
     private void uploadImage() {
-        if (imageUri != null || imageView.getDrawable() != null) {
-            // Show loading dialog
-            loadingDialog.show();
-            loadingDialog.setLoadingText("Identifying plant...");
+        if (imageUri == null && imageView.getDrawable() == null) {
+            Toast.makeText(this, "Please select or capture an image first!", Toast.LENGTH_SHORT).show();
+            return;
+        }
 
-            // Process image on background thread
-            executor.execute(() -> {
-                // Simulate network delay or processing time (3 seconds)
-                try {
-                    // This would be where you'd normally process the image or make API calls
-                    Thread.sleep(3000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
+        loadingDialog.show();
+        loadingDialog.setLoadingText("Identifying plant...");
+
+        executor.execute(() -> {
+            try {
+                File imageFile = createTempFileFromUri(imageUri);
+
+                if (imageFile == null || !imageFile.exists()) {
+                    mainHandler.post(() -> {
+                        loadingDialog.dismiss();
+                        Toast.makeText(MainActivity.this, "Error preparing image file", Toast.LENGTH_SHORT).show();
+                        showDummyResults();
+                    });
+                    return;
                 }
 
-                // Dummy JSON data - in real app, this would come from your model or API
-                ArrayList<String> probablePlants = new ArrayList<>(Arrays.asList(
-                        "Tulsi",
-                        "Neem",
-                        "Aloe Vera"
-                ));
-                String topPlantUses = "Aloe Vera is used for skin treatment, digestion improvement, and healing wounds.";
+                RequestBody requestBody = new MultipartBody.Builder()
+                        .setType(MultipartBody.FORM)
+                        .addFormDataPart("file", imageFile.getName(),
+                                RequestBody.create(imageFile, MediaType.parse("image/*")))
+                        .build();
 
-                // Update UI on main thread
-                mainHandler.post(() -> {
-                    // Dismiss loading dialog
-                    loadingDialog.dismiss();
+                Request request = new Request.Builder()
+                        .url(BASE_URL + "predict")
+                        .post(requestBody)
+                        .build();
 
-                    // Start ResultActivity and pass data
-                    Intent intent = new Intent(MainActivity.this, ResultActivity.class);
-                    intent.putStringArrayListExtra("probablePlants", probablePlants);
-                    intent.putExtra("topPlantUses", topPlantUses);
-                    startActivity(intent);
+                client.newCall(request).enqueue(new Callback() {
+                    @Override
+                    public void onFailure(Call call, IOException e) {
+                        Log.e(TAG, "Upload failed: " + e.getMessage());
+                        mainHandler.post(() -> {
+                            loadingDialog.dismiss();
+                            Toast.makeText(MainActivity.this, "Upload failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                            showDummyResults();
+                        });
+                    }
+
+                    @Override
+                    public void onResponse(Call call, Response response) throws IOException {
+                        String responseBody = response.body().string();
+                        Log.d(TAG, "Server response: " + responseBody);
+
+                        mainHandler.post(() -> {
+                            loadingDialog.dismiss();
+
+                            try {
+                                JSONObject jsonResponse = new JSONObject(responseBody);
+
+                                if (jsonResponse.has("error")) {
+                                    String errorMessage = jsonResponse.getString("error");
+                                    Log.e(TAG, "Prediction error: " + errorMessage);
+                                    Toast.makeText(MainActivity.this, "Prediction error: " + errorMessage, Toast.LENGTH_SHORT).show();
+                                    showDummyResults();
+                                    return;
+                                }
+
+                                // Check if this is a successful plant identification response
+                                if (jsonResponse.has("species") && jsonResponse.has("confidence")) {
+                                    // This is a plant identification result
+                                    String topSpecies = jsonResponse.getString("species");
+                                    double confidence = jsonResponse.getDouble("confidence");
+
+                                    Log.d(TAG, "Identified species: " + topSpecies + " with confidence: " + confidence);
+
+                                    // Get additional plant information if available
+                                    String family = jsonResponse.optString("family", "Unknown family");
+                                    String scientificName = jsonResponse.optString("scientific_name", topSpecies);
+                                    String commonNames = jsonResponse.optString("common_names", topSpecies);
+                                    String uses = jsonResponse.optString("medicinal_properties", "Information not available");
+                                    String habitat = jsonResponse.optString("habitat", "Various environments");
+
+                                    // Get top predictions for probable plants
+                                    ArrayList<String> probablePlants = new ArrayList<>();
+                                    JSONArray topPredictions = jsonResponse.optJSONArray("top_predictions");
+
+                                    if (topPredictions != null && topPredictions.length() > 0) {
+                                        for (int i = 0; i < Math.min(5, topPredictions.length()); i++) {
+                                            JSONObject prediction = topPredictions.getJSONObject(i);
+                                            String species = prediction.getString("species");
+                                            double predConfidence = prediction.getDouble("confidence");
+                                            probablePlants.add(species + " (" + String.format("%.1f", predConfidence * 100) + "%)");
+                                        }
+                                    } else {
+                                        // If no top_predictions array, add the main result
+                                        probablePlants.add(topSpecies + " (" + String.format("%.1f", confidence * 100) + "%)");
+                                    }
+
+                                    // Start ResultActivity with comprehensive plant data
+                                    Intent intent = new Intent(MainActivity.this, ResultActivity.class);
+                                    intent.putStringArrayListExtra("probablePlants", probablePlants);
+                                    intent.putExtra("topPlantUses", uses);
+                                    intent.putExtra("confidence", confidence);
+                                    intent.putExtra("plantName", commonNames);
+                                    intent.putExtra("scientificName", scientificName);
+                                    intent.putExtra("family", family);
+                                    intent.putExtra("habitat", habitat);
+                                    intent.putExtra("isRealIdentification", true);
+                                    startActivity(intent);
+
+                                } else if (jsonResponse.has("results") && jsonResponse.has("success")) {
+                                    // This might be a search result format
+                                    JSONArray results = jsonResponse.getJSONArray("results");
+                                    if (results.length() > 0) {
+                                        JSONObject firstResult = results.getJSONObject(0);
+
+                                        String plantName = firstResult.optString("plant_name", "Unknown Plant");
+                                        String scientificName = firstResult.optString("scientific_name", "Unknown");
+                                        String family = firstResult.optString("family", "Unknown family");
+                                        String uses = firstResult.optString("medicinal_properties", "Information not available");
+                                        String habitat = firstResult.optString("habitat", "Various environments");
+
+                                        ArrayList<String> probablePlants = new ArrayList<>();
+                                        probablePlants.add(plantName + " (Identified)");
+
+                                        Intent intent = new Intent(MainActivity.this, ResultActivity.class);
+                                        intent.putStringArrayListExtra("probablePlants", probablePlants);
+                                        intent.putExtra("topPlantUses", uses);
+                                        intent.putExtra("confidence", 0.85);
+                                        intent.putExtra("plantName", plantName);
+                                        intent.putExtra("scientificName", scientificName);
+                                        intent.putExtra("family", family);
+                                        intent.putExtra("habitat", habitat);
+                                        intent.putExtra("isRealIdentification", true);
+                                        startActivity(intent);
+                                    } else {
+                                        showDummyResults();
+                                    }
+                                } else {
+                                    // Unexpected response format
+                                    Log.w(TAG, "Unexpected response format: " + responseBody);
+                                    showDummyResults();
+                                }
+
+                            } catch (JSONException e) {
+                                Log.e(TAG, "Error parsing response: " + e.getMessage());
+                                Toast.makeText(MainActivity.this, "Error parsing response", Toast.LENGTH_SHORT).show();
+                                showDummyResults();
+                            }
+                        });
+                    }
                 });
-            });
+
+            } catch (Exception e) {
+                Log.e(TAG, "Error preparing image: " + e.getMessage());
+                mainHandler.post(() -> {
+                    loadingDialog.dismiss();
+                    Toast.makeText(MainActivity.this, "Error preparing image: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    showDummyResults();
+                });
+            }
+        });
+    }
+
+    private File createTempFileFromUri(Uri uri) {
+        try {
+            if (uri == null) return null;
+
+            File tempFile = new File(getCacheDir(), "temp_image_" + System.currentTimeMillis() + ".jpg");
+
+            try (InputStream inputStream = getContentResolver().openInputStream(uri);
+                 FileOutputStream outputStream = new FileOutputStream(tempFile)) {
+
+                if (inputStream == null) return null;
+
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+
+                Log.d(TAG, "Temp file created: " + tempFile.getAbsolutePath());
+                return tempFile;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error creating temp file: " + e.getMessage());
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    private void showDummyResults() {
+        ArrayList<String> probablePlants = new ArrayList<>(Arrays.asList(
+                "Tulsi (Holy Basil)", "Neem", "Aloe Vera"
+        ));
+        String topPlantUses = "Plant identification using local processing. For accurate results, ensure server connection is available.";
+
+        Intent intent = new Intent(MainActivity.this, ResultActivity.class);
+        intent.putStringArrayListExtra("probablePlants", probablePlants);
+        intent.putExtra("topPlantUses", topPlantUses);
+        intent.putExtra("confidence", 0.0);
+        intent.putExtra("plantName", "Sample Plant");
+        intent.putExtra("scientificName", "Plantus sampleus");
+        intent.putExtra("family", "Sample Family");
+        intent.putExtra("habitat", "Various environments");
+        intent.putExtra("isRealIdentification", false);
+        startActivity(intent);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (isMenuVisible) {
+            hideMenu();
         } else {
-            Toast.makeText(this, "Please select or capture an image first!", Toast.LENGTH_SHORT).show();
+            super.onBackPressed();
         }
     }
 

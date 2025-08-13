@@ -1,139 +1,183 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/main_layout"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
 
+    <!-- Theme Switch -->
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/themeSwitch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
+        android:text="Dark Mode"
+        android:textSize="12sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- App Title -->
+    <TextView
+        android:id="@+id/titleTextView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:layout_marginStart="16dp"
+        android:text="HerbAI 🌿"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Image Display -->
+    <ImageView
+        android:id="@+id/imageView"
+        android:layout_width="300dp"
+        android:layout_height="300dp"
+        android:layout_marginTop="32dp"
+        android:background="@drawable/image_placeholder_background"
+        android:scaleType="centerCrop"
+        android:src="@drawable/ic_image_placeholder"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/titleTextView" />
+
+    <!-- Control Buttons -->
     <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
+        android:id="@+id/buttonLayout"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="24dp"
+        android:orientation="horizontal"
         android:gravity="center"
-        android:padding="20dp">
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/imageView">
 
-        <!-- Dark Mode Switch - Moved to top center -->
-        <com.google.android.material.materialswitch.MaterialSwitch
-            android:id="@+id/themeSwitch"
-            android:layout_width="wrap_content"
+        <Button
+            android:id="@+id/selectButton"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="Dark Mode"
-            android:textSize="16sp"
-            app:useMaterialThemeColors="true"
-            android:layout_marginBottom="20dp"/>
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:text="Gallery"
+            style="@style/Widget.Material3.Button.TonalButton" />
 
-        <!-- App Name TextView -->
-        <TextView
-            android:id="@+id/appNameText"
-            android:layout_width="wrap_content"
+        <Button
+            android:id="@+id/cameraButton"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="HerbAi"
-            android:textSize="36sp"
-            android:textStyle="bold"
-            android:textColor="?attr/colorPrimary"
-            android:layout_marginBottom="30dp"
-            android:gravity="center" />
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:text="Camera"
+            style="@style/Widget.Material3.Button.TonalButton" />
 
-        <!-- ImageView for Display -->
-        <ImageView
-            android:id="@+id/imageView"
-            android:layout_width="250dp"
-            android:layout_height="250dp"
-            android:scaleType="centerCrop"
-            android:src="@drawable/ic_placeholder"
-            android:layout_marginBottom="20dp"
-            android:background="?attr/colorSurface"
-            android:elevation="4dp"
-            android:padding="10dp"
-            android:clipToOutline="true"/>
-
-        <!-- Buttons Layout -->
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:layout_marginBottom="10dp">
-
-            <Button
-                android:id="@+id/selectButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Select Image"
-                android:backgroundTint="?attr/colorPrimary"
-                android:textColor="?attr/colorOnPrimary"
-                android:layout_marginEnd="10dp"/>
-
-            <Button
-                android:id="@+id/cameraButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Capture"
-                android:backgroundTint="?attr/colorSecondary"
-                android:textColor="?attr/colorOnSecondary"/>
-        </LinearLayout>
-
-        <!-- Upload Button -->
         <Button
             android:id="@+id/uploadButton"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="Upload"
-            android:backgroundTint="?attr/colorTertiary"
-            android:textColor="?attr/colorOnTertiary"
-            android:layout_marginBottom="70dp"/>
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:text="Identify"
+            style="@style/Widget.Material3.Button" />
+
     </LinearLayout>
 
-    <!-- First FAB Button - Left of main FAB -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fab_1"
-        android:layout_width="wrap_content"
+    <!-- Instructions -->
+    <TextView
+        android:id="@+id/instructionsTextView"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:contentDescription="First Page"
-        android:visibility="invisible"
-        app:fabSize="mini"
-        app:layout_constraintBottom_toBottomOf="@id/main_fab"
-        app:layout_constraintEnd_toStartOf="@id/main_fab"
-        android:layout_marginEnd="16dp"
-        app:srcCompat="@android:drawable/ic_menu_gallery" />
-
-    <!-- Main FAB Button - Center bottom -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/main_fab"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="24dp"
-        android:contentDescription="Menu Button"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:srcCompat="@android:drawable/ic_dialog_dialer" />
-
-    <!-- Third FAB Button - Right of main FAB -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fab_3"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:contentDescription="Third Page"
-        android:visibility="invisible"
-        app:fabSize="mini"
-        app:layout_constraintBottom_toBottomOf="@id/main_fab"
-        app:layout_constraintStart_toEndOf="@id/main_fab"
         android:layout_marginStart="16dp"
-        app:srcCompat="@android:drawable/ic_menu_help" />
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="16dp"
+        android:text="Select an image from gallery or capture with camera, then tap 'Identify' to get plant information. Use the menu button to access additional features."
+        android:textAlignment="center"
+        android:textSize="14sp"
+        android:textColor="?android:attr/textColorSecondary"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/buttonLayout" />
 
-    <!-- Second FAB Button - Above main FAB -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fab_2"
+    <!-- Menu Layout - Initially Hidden -->
+    <LinearLayout
+        android:id="@+id/menu_layout"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:contentDescription="Second Page"
-        android:visibility="invisible"
-        app:fabSize="mini"
-        app:layout_constraintBottom_toTopOf="@id/main_fab"
-        app:layout_constraintStart_toStartOf="@id/main_fab"
-        app:layout_constraintEnd_toEndOf="@id/main_fab"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="80dp"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="@drawable/menu_background"
+        android:elevation="8dp"
+        android:visibility="gone"
+        android:alpha="0"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <Button
+            android:id="@+id/menu_plant_search"
+            android:layout_width="180dp"
+            android:layout_height="48dp"
+            android:layout_marginBottom="8dp"
+            android:text="🔍 Plant Search"
+            android:textAlignment="viewStart"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            style="@style/Widget.Material3.Button.TonalButton" />
+
+        <Button
+            android:id="@+id/menu_system_status"
+            android:layout_width="180dp"
+            android:layout_height="48dp"
+            android:layout_marginBottom="8dp"
+            android:text="⚙️ System Status"
+            android:textAlignment="viewStart"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            style="@style/Widget.Material3.Button.TonalButton" />
+
+        <Button
+            android:id="@+id/menu_generate_data"
+            android:layout_width="180dp"
+            android:layout_height="48dp"
+            android:layout_marginBottom="8dp"
+            android:text="📊 Generate Data"
+            android:textAlignment="viewStart"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            style="@style/Widget.Material3.Button.TonalButton" />
+
+        <Button
+            android:id="@+id/menu_settings"
+            android:layout_width="180dp"
+            android:layout_height="48dp"
+            android:text="⚙️ Settings"
+            android:textAlignment="viewStart"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            style="@style/Widget.Material3.Button.TonalButton" />
+
+    </LinearLayout>
+
+    <!-- Menu FAB -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/menu_fab"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="16dp"
         android:layout_marginBottom="16dp"
-        app:srcCompat="@android:drawable/ic_menu_camera" />
+        android:src="@drawable/ic_menu"
+        android:contentDescription="Menu"
+        app:fabSize="normal"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
