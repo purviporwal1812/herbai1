@@ -387,6 +387,8 @@ public class MainActivity extends AppCompatActivity {
                         });
                     }
 
+
+
                     @Override
                     public void onResponse(Call call, Response response) throws IOException {
                         String responseBody = response.body().string();
@@ -421,6 +423,34 @@ public class MainActivity extends AppCompatActivity {
                                     String uses = jsonResponse.optString("medicinal_properties", "Information not available");
                                     String habitat = jsonResponse.optString("habitat", "Various environments");
 
+                                    // Extract image URLs from MongoDB response
+                                    ArrayList<String> dbImageUrls = new ArrayList<>();
+                                    if (jsonResponse.has("db_image_urls")) {
+                                        JSONArray imageUrlArray = jsonResponse.getJSONArray("db_image_urls");
+                                        for (int i = 0; i < imageUrlArray.length(); i++) {
+                                            dbImageUrls.add(imageUrlArray.getString(i));
+                                        }
+                                        Log.d(TAG, "Found " + dbImageUrls.size() + " database images for " + topSpecies);
+                                    }
+
+                                    // Extract images from db_matches
+                                    if (jsonResponse.has("db_matches")) {
+                                        JSONArray dbMatches = jsonResponse.getJSONArray("db_matches");
+                                        for (int i = 0; i < dbMatches.length(); i++) {
+                                            JSONObject match = dbMatches.getJSONObject(i);
+                                            if (match.has("image_urls")) {
+                                                JSONArray matchImages = match.getJSONArray("image_urls");
+                                                for (int j = 0; j < matchImages.length(); j++) {
+                                                    String imageUrl = matchImages.getString(j);
+                                                    if (!dbImageUrls.contains(imageUrl)) {
+                                                        dbImageUrls.add(imageUrl);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        Log.d(TAG, "Total images after db_matches: " + dbImageUrls.size());
+                                    }
+
                                     // Get top predictions for probable plants
                                     ArrayList<String> probablePlants = new ArrayList<>();
                                     JSONArray topPredictions = jsonResponse.optJSONArray("top_predictions");
@@ -437,9 +467,10 @@ public class MainActivity extends AppCompatActivity {
                                         probablePlants.add(topSpecies + " (" + String.format("%.1f", confidence * 100) + "%)");
                                     }
 
-                                    // Start ResultActivity with comprehensive plant data
+                                    // Start ResultActivity with comprehensive plant data including images
                                     Intent intent = new Intent(MainActivity.this, ResultActivity.class);
                                     intent.putStringArrayListExtra("probablePlants", probablePlants);
+                                    intent.putStringArrayListExtra("dbImageUrls", dbImageUrls); // Pass image URLs
                                     intent.putExtra("topPlantUses", uses);
                                     intent.putExtra("confidence", confidence);
                                     intent.putExtra("plantName", commonNames);
@@ -447,10 +478,11 @@ public class MainActivity extends AppCompatActivity {
                                     intent.putExtra("family", family);
                                     intent.putExtra("habitat", habitat);
                                     intent.putExtra("isRealIdentification", true);
+                                    intent.putExtra("hasDbImages", !dbImageUrls.isEmpty()); // Flag for image availability
                                     startActivity(intent);
 
                                 } else if (jsonResponse.has("results") && jsonResponse.has("success")) {
-                                    // This might be a search result format
+                                    // Handle search result format with image data
                                     JSONArray results = jsonResponse.getJSONArray("results");
                                     if (results.length() > 0) {
                                         JSONObject firstResult = results.getJSONObject(0);
@@ -461,11 +493,21 @@ public class MainActivity extends AppCompatActivity {
                                         String uses = firstResult.optString("medicinal_properties", "Information not available");
                                         String habitat = firstResult.optString("habitat", "Various environments");
 
+                                        // Extract image URLs if available
+                                        ArrayList<String> dbImageUrls = new ArrayList<>();
+                                        if (firstResult.has("image_urls")) {
+                                            JSONArray imageUrlArray = firstResult.getJSONArray("image_urls");
+                                            for (int i = 0; i < imageUrlArray.length(); i++) {
+                                                dbImageUrls.add(imageUrlArray.getString(i));
+                                            }
+                                        }
+
                                         ArrayList<String> probablePlants = new ArrayList<>();
                                         probablePlants.add(plantName + " (Identified)");
 
                                         Intent intent = new Intent(MainActivity.this, ResultActivity.class);
                                         intent.putStringArrayListExtra("probablePlants", probablePlants);
+                                        intent.putStringArrayListExtra("dbImageUrls", dbImageUrls);
                                         intent.putExtra("topPlantUses", uses);
                                         intent.putExtra("confidence", 0.85);
                                         intent.putExtra("plantName", plantName);
@@ -473,6 +515,7 @@ public class MainActivity extends AppCompatActivity {
                                         intent.putExtra("family", family);
                                         intent.putExtra("habitat", habitat);
                                         intent.putExtra("isRealIdentification", true);
+                                        intent.putExtra("hasDbImages", !dbImageUrls.isEmpty());
                                         startActivity(intent);
                                     } else {
                                         showDummyResults();

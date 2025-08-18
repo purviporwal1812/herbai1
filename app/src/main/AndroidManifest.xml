@@ -28,6 +28,7 @@
         android:label="HerbAi"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"
         android:requestLegacyExternalStorage="true">
 
         <!-- File Provider -->
@@ -51,6 +52,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".PlantImageGalleryActivity"
+            android:label="Plant Images"
+
+            android:exported="false" />
+
+        <activity
+            android:name=".FullScreenImageActivity"
+            android:label="Full Screen Image"
+            android:exported="false" />
 
         <!-- Other Activities -->
         <activity

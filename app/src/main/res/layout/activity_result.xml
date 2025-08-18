@@ -11,6 +11,7 @@
         android:orientation="vertical"
         android:padding="16dp">
 
+
         <!-- Theme Switch -->
         <LinearLayout
             android:layout_width="match_parent"
@@ -124,6 +125,24 @@
                     android:textColor="@android:color/holo_green_dark"
                     android:background="@android:color/transparent"
                     android:padding="8dp" />
+                <!-- Add this button to your existing activity_result.xml layout -->
+                <!-- Place it in an appropriate location, for example after the searchMoreButton -->
+
+                <Button
+                    android:id="@+id/viewImagesButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="16dp"
+                    android:text="View Plant Images 📸"
+                    android:textColor="?attr/colorOnSecondary"
+                    android:background="?attr/colorSecondary"
+                    android:padding="12dp"
+                    android:textSize="16sp"
+                    android:visibility="gone"
+                    style="@style/Widget.Material3.Button"
+                    app:layout_constraintTop_toBottomOf="@id/searchMoreButton"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent" />
 
             </LinearLayout>
 

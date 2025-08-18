@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/imageCardView"
+    android:layout_width="match_parent"
+    android:layout_height="180dp"
+    android:layout_margin="8dp"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="4dp"
+    android:foreground="?android:attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <!-- Plant Image -->
+        <ImageView
+            android:id="@+id/plantImageView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:background="?attr/colorSurfaceVariant"
+            android:contentDescription="Plant image" />
+
+        <!-- Loading Progress Bar -->
+        <ProgressBar
+            android:id="@+id/imageProgressBar"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="center"
+            android:visibility="visible" />
+
+        <!-- Error Text View -->
+        <TextView
+            android:id="@+id/errorTextView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="Failed to load"
+            android:textSize="12sp"
+            android:textColor="?attr/colorError"
+            android:visibility="gone"
+            android:background="@drawable/rounded_background"
+            android:padding="8dp" />
+
+        <!-- Image Overlay with Gradient -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:layout_gravity="bottom"
+            android:background="@drawable/gradient_overlay" />
+
+    </FrameLayout>
+
+</androidx.cardview.widget.CardView>
