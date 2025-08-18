@@ -30,8 +30,8 @@ import java.net.URLEncoder;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-public class PlantSearchActivity extends AppCompatActivity {
-    private static final String TAG = "PlantSearchActivity";
+public class PlantSearchActivityK extends AppCompatActivity {
+    private static final String TAG = "PlantSearchActivityK";
     private static final String BASE_API_URL = "https://serverv1-1.onrender.com";
 
     private SwitchMaterial themeSwitch;
@@ -120,7 +120,7 @@ public class PlantSearchActivity extends AppCompatActivity {
                     searchEditText.postDelayed(searchRunnable, 1000); // 1 second delay
                 } else if (query.isEmpty()) {
                     clearResults();
-                    statusTextView.setText("Enter a plant name to search...");
+                    statusTextView.setText("Enter a disease name to search...");
                 }
             }
         });
@@ -166,7 +166,7 @@ public class PlantSearchActivity extends AppCompatActivity {
 
         try {
             String encodedPlantName = URLEncoder.encode(plantName.trim(), "UTF-8");
-            String urlString = BASE_API_URL + "/smart_search/" + encodedPlantName;
+            String urlString = BASE_API_URL + "/search_by_keywords/" + encodedPlantName;
 
             Log.d(TAG, "Querying backend API: " + urlString);
 
@@ -360,7 +360,7 @@ public class PlantSearchActivity extends AppCompatActivity {
 
     private void showPlantDetails(JSONObject plantData) {
         try {
-            Intent intent = new Intent(PlantSearchActivity.this, ResultActivity.class);
+            Intent intent = new Intent(PlantSearchActivityK.this, ResultActivity.class);
 
             // Extract and pass plant information
             String plantName = plantData.optString("plant_name", "Unknown Plant");

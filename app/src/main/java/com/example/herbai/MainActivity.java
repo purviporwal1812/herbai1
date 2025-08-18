@@ -190,15 +190,21 @@ public class MainActivity extends AppCompatActivity {
 
         // Menu item buttons
         Button plantSearchBtn = findViewById(R.id.menu_plant_search);
+        Button plantSearchBtnK = findViewById(R.id.menu_search_by_disease);
+
         Button systemStatusBtn = findViewById(R.id.menu_system_status);
         Button generateDataBtn = findViewById(R.id.menu_generate_data);
         Button settingsBtn = findViewById(R.id.menu_settings);
+
 
         plantSearchBtn.setOnClickListener(v -> {
             startActivity(new Intent(MainActivity.this, PlantSearchActivity.class));
             hideMenu();
         });
-
+        plantSearchBtnK.setOnClickListener(v -> {
+            startActivity(new Intent(MainActivity.this, PlantSearchActivityK.class));
+            hideMenu();
+        });
         systemStatusBtn.setOnClickListener(v -> {
             startActivity(new Intent(MainActivity.this, ApiStatusActivity.class));
             hideMenu();
@@ -388,7 +394,7 @@ public class MainActivity extends AppCompatActivity {
                     }
 
 
-
+                    // Replace the onResponse method in your MainActivity with this fixed version:
                     @Override
                     public void onResponse(Call call, Response response) throws IOException {
                         String responseBody = response.body().string();
@@ -410,118 +416,11 @@ public class MainActivity extends AppCompatActivity {
 
                                 // Check if this is a successful plant identification response
                                 if (jsonResponse.has("species") && jsonResponse.has("confidence")) {
-                                    // This is a plant identification result
-                                    String topSpecies = jsonResponse.getString("species");
-                                    double confidence = jsonResponse.getDouble("confidence");
-
-                                    Log.d(TAG, "Identified species: " + topSpecies + " with confidence: " + confidence);
-
-                                    // Get additional plant information if available
-                                    String family = jsonResponse.optString("family", "Unknown family");
-                                    String scientificName = jsonResponse.optString("scientific_name", topSpecies);
-                                    String commonNames = jsonResponse.optString("common_names", topSpecies);
-                                    String uses = jsonResponse.optString("medicinal_properties", "Information not available");
-                                    String habitat = jsonResponse.optString("habitat", "Various environments");
-
-                                    // Extract image URLs from MongoDB response
-                                    ArrayList<String> dbImageUrls = new ArrayList<>();
-                                    if (jsonResponse.has("db_image_urls")) {
-                                        JSONArray imageUrlArray = jsonResponse.getJSONArray("db_image_urls");
-                                        for (int i = 0; i < imageUrlArray.length(); i++) {
-                                            dbImageUrls.add(imageUrlArray.getString(i));
-                                        }
-                                        Log.d(TAG, "Found " + dbImageUrls.size() + " database images for " + topSpecies);
-                                    }
-
-                                    // Extract images from db_matches
-                                    if (jsonResponse.has("db_matches")) {
-                                        JSONArray dbMatches = jsonResponse.getJSONArray("db_matches");
-                                        for (int i = 0; i < dbMatches.length(); i++) {
-                                            JSONObject match = dbMatches.getJSONObject(i);
-                                            if (match.has("image_urls")) {
-                                                JSONArray matchImages = match.getJSONArray("image_urls");
-                                                for (int j = 0; j < matchImages.length(); j++) {
-                                                    String imageUrl = matchImages.getString(j);
-                                                    if (!dbImageUrls.contains(imageUrl)) {
-                                                        dbImageUrls.add(imageUrl);
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        Log.d(TAG, "Total images after db_matches: " + dbImageUrls.size());
-                                    }
-
-                                    // Get top predictions for probable plants
-                                    ArrayList<String> probablePlants = new ArrayList<>();
-                                    JSONArray topPredictions = jsonResponse.optJSONArray("top_predictions");
-
-                                    if (topPredictions != null && topPredictions.length() > 0) {
-                                        for (int i = 0; i < Math.min(5, topPredictions.length()); i++) {
-                                            JSONObject prediction = topPredictions.getJSONObject(i);
-                                            String species = prediction.getString("species");
-                                            double predConfidence = prediction.getDouble("confidence");
-                                            probablePlants.add(species + " (" + String.format("%.1f", predConfidence * 100) + "%)");
-                                        }
-                                    } else {
-                                        // If no top_predictions array, add the main result
-                                        probablePlants.add(topSpecies + " (" + String.format("%.1f", confidence * 100) + "%)");
-                                    }
-
-                                    // Start ResultActivity with comprehensive plant data including images
-                                    Intent intent = new Intent(MainActivity.this, ResultActivity.class);
-                                    intent.putStringArrayListExtra("probablePlants", probablePlants);
-                                    intent.putStringArrayListExtra("dbImageUrls", dbImageUrls); // Pass image URLs
-                                    intent.putExtra("topPlantUses", uses);
-                                    intent.putExtra("confidence", confidence);
-                                    intent.putExtra("plantName", commonNames);
-                                    intent.putExtra("scientificName", scientificName);
-                                    intent.putExtra("family", family);
-                                    intent.putExtra("habitat", habitat);
-                                    intent.putExtra("isRealIdentification", true);
-                                    intent.putExtra("hasDbImages", !dbImageUrls.isEmpty()); // Flag for image availability
-                                    startActivity(intent);
-
+                                    handlePlantIdentificationResponse(jsonResponse);
                                 } else if (jsonResponse.has("results") && jsonResponse.has("success")) {
-                                    // Handle search result format with image data
-                                    JSONArray results = jsonResponse.getJSONArray("results");
-                                    if (results.length() > 0) {
-                                        JSONObject firstResult = results.getJSONObject(0);
-
-                                        String plantName = firstResult.optString("plant_name", "Unknown Plant");
-                                        String scientificName = firstResult.optString("scientific_name", "Unknown");
-                                        String family = firstResult.optString("family", "Unknown family");
-                                        String uses = firstResult.optString("medicinal_properties", "Information not available");
-                                        String habitat = firstResult.optString("habitat", "Various environments");
-
-                                        // Extract image URLs if available
-                                        ArrayList<String> dbImageUrls = new ArrayList<>();
-                                        if (firstResult.has("image_urls")) {
-                                            JSONArray imageUrlArray = firstResult.getJSONArray("image_urls");
-                                            for (int i = 0; i < imageUrlArray.length(); i++) {
-                                                dbImageUrls.add(imageUrlArray.getString(i));
-                                            }
-                                        }
-
-                                        ArrayList<String> probablePlants = new ArrayList<>();
-                                        probablePlants.add(plantName + " (Identified)");
-
-                                        Intent intent = new Intent(MainActivity.this, ResultActivity.class);
-                                        intent.putStringArrayListExtra("probablePlants", probablePlants);
-                                        intent.putStringArrayListExtra("dbImageUrls", dbImageUrls);
-                                        intent.putExtra("topPlantUses", uses);
-                                        intent.putExtra("confidence", 0.85);
-                                        intent.putExtra("plantName", plantName);
-                                        intent.putExtra("scientificName", scientificName);
-                                        intent.putExtra("family", family);
-                                        intent.putExtra("habitat", habitat);
-                                        intent.putExtra("isRealIdentification", true);
-                                        intent.putExtra("hasDbImages", !dbImageUrls.isEmpty());
-                                        startActivity(intent);
-                                    } else {
-                                        showDummyResults();
-                                    }
+                                    // **FIXED: Handle knowledge graph results properly**
+                                    handleKnowledgeGraphResponse(jsonResponse);
                                 } else {
-                                    // Unexpected response format
                                     Log.w(TAG, "Unexpected response format: " + responseBody);
                                     showDummyResults();
                                 }
@@ -532,6 +431,298 @@ public class MainActivity extends AppCompatActivity {
                                 showDummyResults();
                             }
                         });
+                    }
+
+                    /**
+                     * NEW METHOD: Handle plant identification from ML model
+                     */
+                    private void handlePlantIdentificationResponse(JSONObject jsonResponse) {
+                        try {
+                            String topSpecies = jsonResponse.getString("species");
+                            double confidence = jsonResponse.getDouble("confidence");
+
+                            Log.d(TAG, "Identified species: " + topSpecies + " with confidence: " + confidence);
+
+                            // Get additional plant information if available
+                            String family = jsonResponse.optString("family", "Unknown family");
+                            String scientificName = jsonResponse.optString("scientific_name", topSpecies);
+                            String commonNames = jsonResponse.optString("common_names", topSpecies);
+                            String uses = jsonResponse.optString("medicinal_properties", "Information not available");
+                            String habitat = jsonResponse.optString("habitat", "Various environments");
+
+                            // Extract database information from JSON response
+                            String databaseUses = jsonResponse.optString("uses", "");
+                            String databaseMedicinalProperties = jsonResponse.optString("medicinal_properties", "");
+                            String databaseChemicalComponents = jsonResponse.optString("chemical_components", "");
+
+                            // Extract image URLs from MongoDB response
+                            ArrayList<String> dbImageUrls = new ArrayList<>();
+                            if (jsonResponse.has("db_image_urls")) {
+                                JSONArray imageUrlArray = jsonResponse.getJSONArray("db_image_urls");
+                                for (int i = 0; i < imageUrlArray.length(); i++) {
+                                    dbImageUrls.add(imageUrlArray.getString(i));
+                                }
+                                Log.d(TAG, "Found " + dbImageUrls.size() + " database images for " + topSpecies);
+                            }
+
+                            // Extract images from db_matches
+                            if (jsonResponse.has("db_matches")) {
+                                JSONArray dbMatches = jsonResponse.getJSONArray("db_matches");
+                                for (int i = 0; i < dbMatches.length(); i++) {
+                                    JSONObject match = dbMatches.getJSONObject(i);
+                                    if (match.has("image_urls")) {
+                                        JSONArray matchImages = match.getJSONArray("image_urls");
+                                        for (int j = 0; j < matchImages.length(); j++) {
+                                            String imageUrl = matchImages.getString(j);
+                                            if (!dbImageUrls.contains(imageUrl)) {
+                                                dbImageUrls.add(imageUrl);
+                                            }
+                                        }
+                                    }
+                                }
+                                Log.d(TAG, "Total images after db_matches: " + dbImageUrls.size());
+                            }
+
+                            // Get top predictions for probable plants
+                            ArrayList<String> probablePlants = new ArrayList<>();
+                            JSONArray topPredictions = jsonResponse.optJSONArray("top_predictions");
+
+                            if (topPredictions != null && topPredictions.length() > 0) {
+                                for (int i = 0; i < Math.min(5, topPredictions.length()); i++) {
+                                    JSONObject prediction = topPredictions.getJSONObject(i);
+                                    String species = prediction.getString("species");
+                                    double predConfidence = prediction.getDouble("confidence");
+                                    probablePlants.add(species + " (" + String.format("%.1f", predConfidence * 100) + "%)");
+                                }
+                            } else {
+                                probablePlants.add(topSpecies + " (" + String.format("%.1f", confidence * 100) + "%)");
+                            }
+
+                            // Start ResultActivity with comprehensive plant data
+                            Intent intent = new Intent(MainActivity.this, ResultActivity.class);
+                            intent.putStringArrayListExtra("probablePlants", probablePlants);
+                            intent.putStringArrayListExtra("dbImageUrls", dbImageUrls);
+                            intent.putExtra("topPlantUses", uses);
+                            intent.putExtra("confidence", confidence);
+                            intent.putExtra("plantName", commonNames);
+                            intent.putExtra("scientificName", scientificName);
+                            intent.putExtra("family", family);
+                            intent.putExtra("habitat", habitat);
+                            intent.putExtra("isRealIdentification", true);
+                            intent.putExtra("isFromSearchRoute", true);
+                            intent.putExtra("hasDbImages", !dbImageUrls.isEmpty());
+                            intent.putExtra("databaseUses", databaseUses);
+                            intent.putExtra("databaseMedicinalProperties", databaseMedicinalProperties);
+                            intent.putExtra("databaseChemicalComponents", databaseChemicalComponents);
+
+                            startActivity(intent);
+
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error handling plant identification response: " + e.getMessage());
+                            showDummyResults();
+                        }
+                    }
+
+                    /**
+                     * NEW METHOD: Handle knowledge graph results with priority to knowledge graph data
+                     */
+                    private void handleKnowledgeGraphResponse(JSONObject jsonResponse) {
+                        try {
+                            JSONArray results = jsonResponse.getJSONArray("results");
+                            if (results.length() == 0) {
+                                Log.w(TAG, "No results in knowledge graph response");
+                                showDummyResults();
+                                return;
+                            }
+
+                            Log.d(TAG, "Processing knowledge graph response with " + results.length() + " results");
+
+                            // **PRIORITY 1: Find knowledge graph entries (auto_generated = null or false)**
+                            JSONObject knowledgeGraphResult = findKnowledgeGraphEntry(results);
+
+                            if (knowledgeGraphResult != null) {
+                                Log.d(TAG, "Found knowledge graph entry - using it directly");
+                                processKnowledgeGraphResult(knowledgeGraphResult, results);
+                            } else {
+                                // **PRIORITY 2: Find any result with meaningful uses**
+                                JSONObject bestResult = findResultWithMeaningfulUses(results);
+                                if (bestResult != null) {
+                                    Log.d(TAG, "Found result with meaningful uses");
+                                    processKnowledgeGraphResult(bestResult, results);
+                                } else {
+                                    Log.w(TAG, "No meaningful results found - using fallback");
+                                    showDummyResults();
+                                }
+                            }
+
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error handling knowledge graph response: " + e.getMessage());
+                            showDummyResults();
+                        }
+                    }
+
+                    /**
+                     * NEW METHOD: Find authentic knowledge graph entries (not auto-generated)
+                     */
+                    private JSONObject findKnowledgeGraphEntry(JSONArray results) {
+                        try {
+                            for (int i = 0; i < results.length(); i++) {
+                                JSONObject result = results.getJSONObject(i);
+
+                                // Check if this is a knowledge graph entry (not auto-generated)
+                                boolean autoGenerated = result.optBoolean("auto_generated", false);
+                                String dataSource = result.optString("data_source", "");
+
+                                // Prioritize non-auto-generated entries from knowledge graph
+                                if (!autoGenerated || dataSource.isEmpty()) {
+                                    String uses = result.optString("uses", "").trim();
+
+                                    // Must have meaningful uses to be considered
+                                    if (!uses.isEmpty() && !isGenericUses(uses)) {
+                                        Log.d(TAG, "Found knowledge graph entry: " + result.optString("plant_name", "Unknown"));
+                                        Log.d(TAG, "Uses preview: " + uses.substring(0, Math.min(uses.length(), 100)));
+                                        return result;
+                                    }
+                                }
+                            }
+
+                            Log.d(TAG, "No authentic knowledge graph entries found");
+                            return null;
+
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error finding knowledge graph entry: " + e.getMessage());
+                            return null;
+                        }
+                    }
+
+                    /**
+                     * NEW METHOD: Find any result with meaningful uses (fallback)
+                     */
+                    private JSONObject findResultWithMeaningfulUses(JSONArray results) {
+                        try {
+                            JSONObject bestResult = null;
+                            int bestUsesLength = 0;
+
+                            for (int i = 0; i < results.length(); i++) {
+                                JSONObject result = results.getJSONObject(i);
+                                String uses = result.optString("uses", "").trim();
+
+                                if (!uses.isEmpty() && !isGenericUses(uses) && uses.length() > bestUsesLength) {
+                                    bestResult = result;
+                                    bestUsesLength = uses.length();
+                                    Log.d(TAG, "Better uses found (" + uses.length() + " chars): " +
+                                            result.optString("plant_name", "Unknown"));
+                                }
+                            }
+
+                            return bestResult;
+
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error finding result with meaningful uses: " + e.getMessage());
+                            return null;
+                        }
+                    }
+
+                    /**
+                     * NEW METHOD: Check if uses text is generic/meaningless
+                     */
+                    private boolean isGenericUses(String uses) {
+                        if (uses == null || uses.length() < 15) {
+                            return true;
+                        }
+
+                        String lowerUses = uses.toLowerCase();
+
+                        // Filter out generic phrases
+                        String[] genericPhrases = {
+                                "traditional and ornamental uses",
+                                "uses to be researched",
+                                "information not available",
+                                "under research",
+                                "not available",
+                                "a rose is either",
+                                "they form"
+                        };
+
+                        for (String phrase : genericPhrases) {
+                            if (lowerUses.contains(phrase)) {
+                                return true;
+                            }
+                        }
+
+                        return false;
+                    }
+
+                    /**
+                     * NEW METHOD: Process the selected knowledge graph result
+                     */
+                    private void processKnowledgeGraphResult(JSONObject selectedResult, JSONArray allResults) {
+                        try {
+                            // Extract information from the selected result
+                            String plantName = selectedResult.optString("plant_name", "Unknown Plant");
+                            String scientificName = selectedResult.optString("scientific_name", "Unknown");
+                            String family = selectedResult.optString("family", "Unknown family");
+                            String habitat = selectedResult.optString("habitat", "Various environments");
+                            String databaseUses = selectedResult.optString("uses", "");
+                            String databaseMedicinalProperties = selectedResult.optString("medicinal_properties", "");
+                            String databaseChemicalComponents = selectedResult.optString("chemical_components", "");
+                            boolean autoGenerated = selectedResult.optBoolean("auto_generated", false);
+
+                            Log.d(TAG, "Processing selected result:");
+                            Log.d(TAG, "Plant: " + plantName);
+                            Log.d(TAG, "Uses length: " + databaseUses.length());
+                            Log.d(TAG, "Auto-generated: " + autoGenerated);
+
+                            // Extract image URLs from the selected result
+                            ArrayList<String> dbImageUrls = new ArrayList<>();
+                            if (selectedResult.has("image_urls")) {
+                                JSONArray imageUrlArray = selectedResult.getJSONArray("image_urls");
+                                for (int i = 0; i < imageUrlArray.length(); i++) {
+                                    dbImageUrls.add(imageUrlArray.getString(i));
+                                }
+                            }
+
+                            // Build probable plants list from all results
+                            ArrayList<String> probablePlants = new ArrayList<>();
+                            for (int i = 0; i < Math.min(5, allResults.length()); i++) {
+                                JSONObject result = allResults.getJSONObject(i);
+                                String name = result.optString("plant_name", "Unknown");
+                                boolean isAutoGen = result.optBoolean("auto_generated", false);
+
+                                if (i == 0 || !isAutoGen) {
+                                    probablePlants.add(name + (isAutoGen ? " (API)" : " (Database)"));
+                                }
+                            }
+
+                            // **KEY FIX: Pass the database information directly to ResultActivity**
+                            Intent intent = new Intent(MainActivity.this, ResultActivity.class);
+                            intent.putStringArrayListExtra("probablePlants", probablePlants);
+                            intent.putStringArrayListExtra("dbImageUrls", dbImageUrls);
+                            intent.putExtra("confidence", autoGenerated ? 0.75 : 0.85); // Lower confidence for API data
+                            intent.putExtra("plantName", plantName);
+                            intent.putExtra("scientificName", scientificName);
+                            intent.putExtra("family", family);
+                            intent.putExtra("habitat", habitat);
+                            intent.putExtra("isRealIdentification", true);
+                            intent.putExtra("hasDbImages", !dbImageUrls.isEmpty());
+
+                            // **CRITICAL: Pass the database uses directly - don't let ResultActivity fetch again**
+                            intent.putExtra("databaseUses", databaseUses);
+                            intent.putExtra("databaseMedicinalProperties", databaseMedicinalProperties);
+                            intent.putExtra("databaseChemicalComponents", databaseChemicalComponents);
+                            intent.putExtra("topPlantUses", databaseUses); // This ensures it's displayed immediately
+
+                            // **NEW: Add flag to prevent API fetching**
+                            intent.putExtra("hasKnowledgeGraphData", true);
+                            intent.putExtra("dataSource", autoGenerated ? "API" : "Knowledge Graph");
+
+                            Log.d(TAG, "Starting ResultActivity with knowledge graph data");
+                            startActivity(intent);
+
+                        } catch (Exception e) {
+                            Log.e(TAG, "Error processing knowledge graph result: " + e.getMessage());
+                            showDummyResults();
+                        }
                     }
                 });
 

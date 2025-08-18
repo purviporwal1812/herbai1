@@ -130,7 +130,7 @@ public class ResultActivity extends AppCompatActivity {
             recreate();
         });
     }
-
+    // Replace your displayResults() method in ResultActivity with this fixed version:
     private void displayResults() {
         Intent intent = getIntent();
 
@@ -139,18 +139,31 @@ public class ResultActivity extends AppCompatActivity {
         String scientificName = intent.getStringExtra("scientificName");
         String family = intent.getStringExtra("family");
         String habitat = intent.getStringExtra("habitat");
-        String serverUses = intent.getStringExtra("topPlantUses"); // From server
+        String serverUses = intent.getStringExtra("topPlantUses");
         double confidence = intent.getDoubleExtra("confidence", 0.0);
         boolean isRealIdentification = intent.getBooleanExtra("isRealIdentification", false);
+        boolean isFromSearchRoute = getIntent().getBooleanExtra("isFromSearchRoute", false);
+
+
         ArrayList<String> probablePlants = intent.getStringArrayListExtra("probablePlants");
 
-        // **IMPORTANT: Extract image data from intent**
+        // **CRITICAL: Get database information from intent**
+        String databaseUses = intent.getStringExtra("databaseUses");
+        String databaseMedicinalProperties = intent.getStringExtra("databaseMedicinalProperties");
+        String databaseChemicalComponents = intent.getStringExtra("databaseChemicalComponents");
+        boolean hasKnowledgeGraphData = intent.getBooleanExtra("hasKnowledgeGraphData", false);
+        String dataSource = intent.getStringExtra("dataSource");
+
+        // Extract image data from intent
         dbImageUrls = intent.getStringArrayListExtra("dbImageUrls");
         hasDbImages = intent.getBooleanExtra("hasDbImages", false);
 
-        Log.d(TAG, "Displaying results for plant: " + plantName);
-        Log.d(TAG, "Has DB images: " + hasDbImages + ", Image count: " +
-                (dbImageUrls != null ? dbImageUrls.size() : 0));
+        Log.d(TAG, "=== DISPLAYING RESULTS ===");
+        Log.d(TAG, "Plant: " + plantName);
+        Log.d(TAG, "Has knowledge graph data: " + hasKnowledgeGraphData);
+        Log.d(TAG, "Data source: " + dataSource);
+        Log.d(TAG, "Database uses available: " + (databaseUses != null && !databaseUses.isEmpty()));
+        Log.d(TAG, "Database uses length: " + (databaseUses != null ? databaseUses.length() : 0));
 
         // Display main plant information
         if (plantName != null && !plantName.trim().isEmpty()) {
@@ -188,43 +201,232 @@ public class ResultActivity extends AppCompatActivity {
             confidenceTextView.setVisibility(View.GONE);
         }
 
-        // Get enhanced plant uses from backend API
-        fetchEnhancedPlantUses(plantName, scientificName, serverUses);
+        // **CRITICAL FIX: Display database uses directly if available**
+        if (hasKnowledgeGraphData) {
+            Log.d(TAG, "Using knowledge graph data directly - NO API CALLS");
+            displayDatabaseUsesDirectly(databaseUses, databaseMedicinalProperties,
+                    databaseChemicalComponents, dataSource);
+        } else {
+            Log.d(TAG, "No knowledge graph data - falling back to API");
+            displayDatabaseUses(databaseUses, databaseMedicinalProperties,
+                    databaseChemicalComponents, serverUses);
+        }
 
         // Display identification status
-        displayIdentificationStatus(isRealIdentification, confidence);
+        displayIdentificationStatus(isRealIdentification, confidence,isFromSearchRoute);
 
         // Display probable plants
         displayProbablePlants(probablePlants);
     }
 
+    /**
+     * NEW METHOD: Display database uses directly without any API calls
+     */
+    private void displayDatabaseUsesDirectly(String databaseUses, String medicinalProperties,
+                                             String chemicalComponents, String dataSource) {
+
+        Log.d(TAG, "=== DISPLAYING DATABASE USES DIRECTLY ===");
+        Log.d(TAG, "Database uses: " + (databaseUses != null ?
+                databaseUses.substring(0, Math.min(100, databaseUses.length())) + "..." : "null"));
+
+        StringBuilder usesText = new StringBuilder();
+        boolean hasAnyMeaningfulInfo = false;
+
+        // Add data source header
+        if (dataSource != null && !dataSource.isEmpty()) {
+            if (dataSource.equals("Knowledge Graph")) {
+                usesText.append("📚 Knowledge Graph Information:\n\n");
+            } else {
+                usesText.append("🌐 Information from ").append(dataSource).append(":\n\n");
+            }
+        }
+
+        // **PRIORITY: Display uses information first (this is the main content)**
+        if (databaseUses != null && !databaseUses.trim().isEmpty() &&
+                !databaseUses.equalsIgnoreCase("null") && !isGenericDescription(databaseUses)) {
+
+            usesText.append("📋 Traditional Uses:\n");
+            usesText.append(databaseUses.trim()).append("\n\n");
+            hasAnyMeaningfulInfo = true;
+
+            Log.d(TAG, "✓ Added database uses (" + databaseUses.length() + " chars)");
+        } else {
+            Log.d(TAG, "✗ Database uses not meaningful or empty");
+        }
+
+        // Add medicinal properties if available and meaningful
+        if (medicinalProperties != null && !medicinalProperties.trim().isEmpty() &&
+                !medicinalProperties.equalsIgnoreCase("null") &&
+                !medicinalProperties.equals("Under research") &&
+                !medicinalProperties.equals("Information not available")) {
+
+            usesText.append("💊 Medicinal Properties:\n");
+            usesText.append(medicinalProperties.trim()).append("\n\n");
+            hasAnyMeaningfulInfo = true;
+
+            Log.d(TAG, "✓ Added medicinal properties");
+        }
+
+        // Add chemical components if available and meaningful
+        if (chemicalComponents != null && !chemicalComponents.trim().isEmpty() &&
+                !chemicalComponents.equalsIgnoreCase("null") &&
+                !chemicalComponents.equals("Various organic compounds") &&
+                !chemicalComponents.equals("Components under study")) {
+
+            usesText.append("🧪 Active Compounds:\n");
+            usesText.append(chemicalComponents.trim()).append("\n\n");
+            hasAnyMeaningfulInfo = true;
+
+            Log.d(TAG, "✓ Added chemical components");
+        }
+
+        // If we have meaningful information, display it
+        if (hasAnyMeaningfulInfo) {
+            // Add safety disclaimer
+            usesText.append("⚠️ Safety Notice:\n");
+            usesText.append("Always consult with healthcare practitioners before using any plant medicinally. ");
+            usesText.append("Proper identification is essential for safety.");
+
+            Log.d(TAG, "✓ Displaying " + usesText.length() + " characters of database information");
+            displayPlantUses(usesText.toString());
+        } else {
+            // Last resort fallback
+            Log.w(TAG, "No meaningful database information found - using generic fallback");
+            String fallbackText = "Plant Information:\n\n" +
+                    "This plant has been identified in our database. " +
+                    "Many plants have traditional medicinal and cultural uses. " +
+                    "For detailed information about uses and properties, " +
+                    "consult botanical references or traditional medicine practitioners.\n\n" +
+                    "⚠️ Safety Notice:\n" +
+                    "Always verify plant identification and consult healthcare practitioners " +
+                    "before using any plant for medicinal purposes.";
+
+            displayPlantUses(fallbackText);
+        }
+    }
+
+    /**
+     * UPDATED METHOD: Only use this if we don't have knowledge graph data
+     */
+    private void displayDatabaseUses(String databaseUses, String medicinalProperties,
+                                     String chemicalComponents, String serverUses) {
+
+        // **This method should only be called if hasKnowledgeGraphData is false**
+        Log.d(TAG, "Using original displayDatabaseUses method as fallback");
+
+        StringBuilder usesText = new StringBuilder();
+        boolean hasAnyMeaningfulInfo = false;
+
+        // Check if we have meaningful database information
+        if (databaseUses != null && !databaseUses.trim().isEmpty() &&
+                !databaseUses.equalsIgnoreCase("null") && !isGenericDescription(databaseUses)) {
+
+            usesText.append("📋 Traditional Uses:\n").append(databaseUses.trim()).append("\n\n");
+            hasAnyMeaningfulInfo = true;
+            Log.d(TAG, "Found meaningful database uses");
+        }
+
+        if (medicinalProperties != null && !medicinalProperties.trim().isEmpty() &&
+                !medicinalProperties.equalsIgnoreCase("null") &&
+                !medicinalProperties.equals("Under research") &&
+                !medicinalProperties.equals("Information not available")) {
+
+            usesText.append("💊 Medicinal Properties:\n").append(medicinalProperties.trim()).append("\n\n");
+            hasAnyMeaningfulInfo = true;
+        }
+
+        if (chemicalComponents != null && !chemicalComponents.trim().isEmpty() &&
+                !chemicalComponents.equalsIgnoreCase("null") &&
+                !chemicalComponents.equals("Various organic compounds") &&
+                !chemicalComponents.equals("Components under study")) {
+
+            usesText.append("🧪 Active Compounds:\n").append(chemicalComponents.trim()).append("\n\n");
+            hasAnyMeaningfulInfo = true;
+        }
+
+        if (hasAnyMeaningfulInfo) {
+            usesText.append("⚠️ Safety Notice:\nAlways consult with healthcare practitioners before using any plant medicinally. Proper identification is essential for safety.");
+            Log.d(TAG, "Displaying meaningful database information directly");
+            displayPlantUses(usesText.toString());
+        } else {
+            // Only fall back to API if no meaningful database info
+            Log.d(TAG, "No meaningful database info - trying API as last resort");
+            String plantName = getIntent().getStringExtra("plantName");
+            String scientificName = getIntent().getStringExtra("scientificName");
+            fetchEnhancedPlantUses(plantName, scientificName, serverUses);
+        }
+    }
+    /**
+     * NEW METHOD: Display uses directly from database without API calls
+     */
+
+    /**
+     * Helper method to check if uses text is generic/meaningless
+     */
+    private boolean isGenericDescription(String text) {
+        if (text == null || text.trim().isEmpty()) {
+            return true;
+        }
+
+        String lowerText = text.toLowerCase().trim();
+
+        // Common generic phrases to filter out
+        String[] genericPhrases = {
+                "a rose is either a woody perennial flowering plant",
+                "they form",
+                "there are over three hundred species",
+                "uses to be researched",
+                "traditional and ornamental uses",
+                "information not available",
+                "not available",
+                "under research"
+        };
+
+        for (String phrase : genericPhrases) {
+            if (lowerText.contains(phrase)) {
+                Log.d(TAG, "Identified generic content: " + phrase);
+                return true;
+            }
+        }
+
+        // Check if it's too short to be meaningful
+        if (text.length() < 25) {
+            Log.d(TAG, "Content too short to be meaningful: " + text.length() + " chars");
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * SIMPLIFIED: Updated fetchEnhancedPlantUses - only as last resort
+     */
     private void fetchEnhancedPlantUses(String plantName, String scientificName, String serverUses) {
-        Log.d(TAG, "Fetching enhanced uses from backend for: " + plantName);
+        Log.d(TAG, "API fetch as last resort for: " + plantName);
 
         // Show loading state
         plantUsesTextView.setText("Loading plant information...");
 
-        // Use ExecutorService instead of AsyncTask (deprecated)
         executorService.execute(() -> {
             try {
                 String enhancedUses = getEnhancedPlantUsesFromBackend(plantName, scientificName, serverUses);
 
-                // Update UI on main thread
                 runOnUiThread(() -> {
-                    if (enhancedUses != null && !enhancedUses.isEmpty()) {
+                    if (enhancedUses != null && !enhancedUses.isEmpty() && !isGenericDescription(enhancedUses)) {
                         displayPlantUses(enhancedUses);
+                        Log.d(TAG, "Successfully got enhanced uses from API");
                     } else {
-                        // Fallback to server uses or default message
+                        // Final fallback
                         String fallbackUses = getFallbackUses(serverUses);
                         displayPlantUses(fallbackUses);
+                        Log.d(TAG, "Used final fallback uses");
                     }
                 });
             } catch (Exception e) {
-                Log.e(TAG, "Error fetching plant uses: " + e.getMessage());
+                Log.e(TAG, "API fetch failed: " + e.getMessage());
                 runOnUiThread(() -> {
                     String fallbackUses = getFallbackUses(serverUses);
                     displayPlantUses(fallbackUses);
-                    Toast.makeText(ResultActivity.this, "Using offline data", Toast.LENGTH_SHORT).show();
                 });
             }
         });
@@ -415,31 +617,32 @@ public class ResultActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * NEW METHOD: Extract image URLs from backend response and update image gallery setup
-     */
     private void extractImagesFromBackendResponse(JSONObject jsonResponse) {
         try {
             ArrayList<String> collectedImages = new ArrayList<>();
 
-            // Extract from results array
+            // Extract from results array - but ONLY the first/best result
             JSONArray results = jsonResponse.optJSONArray("results");
-            if (results != null) {
-                for (int i = 0; i < results.length(); i++) {
-                    JSONObject result = results.getJSONObject(i);
-                    if (result.has("image_urls")) {
-                        JSONArray imageUrls = result.getJSONArray("image_urls");
-                        for (int j = 0; j < imageUrls.length(); j++) {
-                            String imageUrl = imageUrls.getString(j);
-                            if (isValidImageUrl(imageUrl) && !collectedImages.contains(imageUrl)) {
-                                collectedImages.add(imageUrl);
-                            }
+            if (results != null && results.length() > 0) {
+                // Only process the FIRST result (the best match)
+                JSONObject firstResult = results.getJSONObject(0);
+                String firstResultName = firstResult.optString("plant_name", "Unknown");
+
+                Log.d(TAG, "Extracting images only from first/best result: " + firstResultName);
+
+                if (firstResult.has("image_urls")) {
+                    JSONArray imageUrls = firstResult.getJSONArray("image_urls");
+                    for (int j = 0; j < imageUrls.length(); j++) {
+                        String imageUrl = imageUrls.getString(j);
+                        if (isValidImageUrl(imageUrl) && !collectedImages.contains(imageUrl)) {
+                            collectedImages.add(imageUrl);
                         }
                     }
+                    Log.d(TAG, "Added " + imageUrls.length() + " images from first result");
                 }
             }
 
-            // Extract from direct db_image_urls if present
+            // Extract from direct db_image_urls if present (should be for main predicted plant)
             if (jsonResponse.has("db_image_urls")) {
                 JSONArray dbImages = jsonResponse.getJSONArray("db_image_urls");
                 for (int i = 0; i < dbImages.length(); i++) {
@@ -448,21 +651,29 @@ public class ResultActivity extends AppCompatActivity {
                         collectedImages.add(imageUrl);
                     }
                 }
+                Log.d(TAG, "Added " + dbImages.length() + " direct db_image_urls");
             }
 
-            // Extract from db_matches if present
+            // Extract from db_matches - but ONLY the FIRST match (highest confidence)
             if (jsonResponse.has("db_matches")) {
                 JSONArray dbMatches = jsonResponse.getJSONArray("db_matches");
-                for (int i = 0; i < dbMatches.length(); i++) {
-                    JSONObject match = dbMatches.getJSONObject(i);
-                    if (match.has("image_urls")) {
-                        JSONArray matchImages = match.getJSONArray("image_urls");
+
+                // Only process the FIRST db_match
+                if (dbMatches.length() > 0) {
+                    JSONObject firstMatch = dbMatches.getJSONObject(0);
+                    String firstMatchSpecies = firstMatch.optString("species", "Unknown");
+
+                    Log.d(TAG, "Processing db_matches only for first match: " + firstMatchSpecies);
+
+                    if (firstMatch.has("image_urls")) {
+                        JSONArray matchImages = firstMatch.getJSONArray("image_urls");
                         for (int j = 0; j < matchImages.length(); j++) {
                             String imageUrl = matchImages.getString(j);
                             if (isValidImageUrl(imageUrl) && !collectedImages.contains(imageUrl)) {
                                 collectedImages.add(imageUrl);
                             }
                         }
+                        Log.d(TAG, "Added " + matchImages.length() + " images from first db_match");
                     }
                 }
             }
@@ -476,17 +687,19 @@ public class ResultActivity extends AppCompatActivity {
                 dbImageUrls.addAll(collectedImages);
                 hasDbImages = true;
 
-                Log.d(TAG, "Extracted " + dbImageUrls.size() + " images from backend response");
+                Log.d(TAG,
+                        "Final count: " + dbImageUrls.size() + " images for main predicted plant only");
 
                 // Update UI on main thread
                 runOnUiThread(() -> updateImageGalleryButton());
+            } else {
+                Log.d(TAG, "No images found for the main predicted plant");
             }
 
         } catch (Exception e) {
-            Log.e(TAG, "Error extracting images from backend response: " + e.getMessage());
+            Log.e(TAG, "Error extracting images for main plant: " + e.getMessage());
         }
     }
-
     private boolean isValidImageUrl(String url) {
         if (url == null || url.trim().isEmpty()) {
             return false;
@@ -503,7 +716,7 @@ public class ResultActivity extends AppCompatActivity {
         if (viewImagesButton != null) {
             if (hasDbImages && dbImageUrls != null && !dbImageUrls.isEmpty()) {
                 viewImagesButton.setVisibility(View.VISIBLE);
-                viewImagesButton.setText("View " + dbImageUrls.size() + " Images 📸");
+                viewImagesButton.setText("View "+ " Images 📸");
                 Log.d(TAG, "Updated view images button: " + dbImageUrls.size() + " images available");
             } else {
                 viewImagesButton.setVisibility(View.GONE);
@@ -519,15 +732,15 @@ public class ResultActivity extends AppCompatActivity {
     }
 
     /**
-     * Find the best result from multiple backend results
-     * Prioritizes results with meaningful uses information
+     * Enhanced findBestResult method that prioritizes results with meaningful uses information
+     * and filters out generic/empty responses
      */
     private JSONObject findBestResult(JSONArray results) {
         try {
             JSONObject bestResult = null;
             int bestScore = -1;
 
-            Log.d(TAG, "Evaluating " + results.length() + " results:");
+            Log.d(TAG, "Evaluating " + results.length() + " results to find the one with best uses info:");
 
             for (int i = 0; i < results.length(); i++) {
                 JSONObject result = results.getJSONObject(i);
@@ -548,19 +761,35 @@ public class ResultActivity extends AppCompatActivity {
                 }
             }
 
-            if (bestResult != null) {
+            if (bestResult != null && bestScore > 0) {
                 String selectedName = bestResult.optString("plant_name", "Unknown");
                 Log.d(TAG, "Final selection: " + selectedName + " with score: " + bestScore);
+                return bestResult;
             } else {
-                Log.w(TAG, "No result had a positive score, selecting first result as fallback");
-                bestResult = results.getJSONObject(0);
-            }
+                Log.w(TAG, "No result had meaningful uses information, using fallback logic");
 
-            return bestResult;
+                // Try to find ANY result with non-empty uses as fallback
+                for (int i = 0; i < results.length(); i++) {
+                    JSONObject result = results.getJSONObject(i);
+                    String uses = result.optString("uses", "").trim();
+
+                    if (!uses.isEmpty() &&
+                            !uses.equals("Uses to be researched") &&
+                            !uses.equals("Traditional and ornamental uses") &&
+                            !uses.toLowerCase().contains("not available")) {
+
+                        Log.d(TAG, "Found fallback result with some uses: " + result.optString("plant_name", "Unknown"));
+                        return result;
+                    }
+                }
+
+                // Last resort - return first result
+                Log.w(TAG, "No results with meaningful uses found, returning first result");
+                return results.getJSONObject(0);
+            }
 
         } catch (Exception e) {
             Log.e(TAG, "Error finding best result: " + e.getMessage());
-            // Fallback to first result if there's an error
             try {
                 return results.getJSONObject(0);
             } catch (Exception fallbackError) {
@@ -571,37 +800,40 @@ public class ResultActivity extends AppCompatActivity {
     }
 
     /**
-     * Calculate a score for each result based on the quality and completeness of information
-     * Higher score means better/more complete information
+     * Enhanced scoring system that heavily prioritizes meaningful uses information
      */
     private int calculateResultScore(JSONObject result) {
         int score = 0;
 
         try {
-            // Uses information is most important (highest weight)
+            // PRIORITY 1: Uses information (highest weight - this is what you want)
             String uses = result.optString("uses", "").trim();
             if (!uses.isEmpty() && !uses.equalsIgnoreCase("null")) {
-                // Check for meaningful uses content
                 String lowerUses = uses.toLowerCase();
 
-                // Give negative score for generic/empty uses
+                // Heavily penalize generic/empty uses
                 if (lowerUses.equals("uses to be researched") ||
                         lowerUses.equals("traditional and ornamental uses") ||
                         lowerUses.contains("not available") ||
-                        lowerUses.contains("information not available")) {
-                    score -= 10; // Penalize generic content
-                } else {
-                    score += 100; // High priority for actual uses
+                        lowerUses.contains("information not available") ||
+                        lowerUses.contains("a rose is either") || // Filter out generic descriptions
+                        lowerUses.contains("they form") ||
+                        uses.length() < 20) { // Too short to be meaningful
 
-                    // Bonus for detailed uses (longer descriptions are usually more informative)
-                    if (uses.length() > 200) {
-                        score += 50;
+                    score -= 50; // Heavy penalty for generic content
+                    Log.d(TAG, "Penalized generic uses: " + uses.substring(0, Math.min(uses.length(), 30)));
+                } else {
+                    score += 200; // Very high priority for actual uses
+
+                    // Extra bonus for detailed uses (this is what you want to display)
+                    if (uses.length() > 300) {
+                        score += 100; // Very detailed
+                    } else if (uses.length() > 200) {
+                        score += 80;
                     } else if (uses.length() > 100) {
-                        score += 30;
+                        score += 60;
                     } else if (uses.length() > 50) {
-                        score += 20;
-                    } else if (uses.length() > 20) {
-                        score += 10;
+                        score += 40;
                     }
 
                     // Bonus for specific medicinal keywords
@@ -609,90 +841,156 @@ public class ResultActivity extends AppCompatActivity {
                             lowerUses.contains("therapeutic") || lowerUses.contains("cure") ||
                             lowerUses.contains("astringent") || lowerUses.contains("digestive") ||
                             lowerUses.contains("antibacterial") || lowerUses.contains("antioxidant") ||
-                            lowerUses.contains("diarrhoea") || lowerUses.contains("dysentery") ||
-                            lowerUses.contains("stomachic") || lowerUses.contains("sherbet")) {
-                        score += 25;
+                            lowerUses.contains("traditional") || lowerUses.contains("remedy")) {
+                        score += 50;
                     }
+
+                    Log.d(TAG, "Found meaningful uses (" + uses.length() + " chars): " +
+                            uses.substring(0, Math.min(uses.length(), 50)) + "...");
                 }
             } else {
-                score -= 20; // Penalize empty uses
+                score -= 100; // Heavy penalty for no uses information
             }
 
-            // Medicinal properties (second priority)
+            // PRIORITY 2: Medicinal properties
             String medicinalProperties = result.optString("medicinal_properties", "").trim();
             if (!medicinalProperties.isEmpty() && !medicinalProperties.equalsIgnoreCase("null")) {
                 String lowerProps = medicinalProperties.toLowerCase();
                 if (!lowerProps.equals("information not available") &&
                         !lowerProps.equals("under research") &&
-                        !lowerProps.equals("components under study")) {
-                    score += 40;
-                    if (medicinalProperties.length() > 50) {
-                        score += 10;
-                    }
+                        !lowerProps.equals("components under study") &&
+                        medicinalProperties.length() > 15) {
+                    score += 80;
                 }
             }
 
-            // Chemical components
+            // PRIORITY 3: Chemical components (relevant for medicinal uses)
             String chemicalComponents = result.optString("chemical_components", "").trim();
             if (!chemicalComponents.isEmpty() && !chemicalComponents.equalsIgnoreCase("null")) {
                 String lowerChemical = chemicalComponents.toLowerCase();
                 if (!lowerChemical.equals("components under study") &&
-                        !lowerChemical.equals("various organic compounds")) {
-                    score += 30;
+                        !lowerChemical.equals("various organic compounds") &&
+                        chemicalComponents.length() > 15) {
+                    score += 60;
                 }
             }
 
-            // Scientific name completeness
+            // Lower priority items
             String scientificName = result.optString("scientific_name", "").trim();
-            if (!scientificName.isEmpty() && !scientificName.equals("Unknown") && !scientificName.equalsIgnoreCase("null")) {
-                score += 20;
-                // Bonus for proper binomial nomenclature (two words)
-                if (scientificName.split("\\s+").length >= 2) {
-                    score += 10;
-                }
+            if (!scientificName.isEmpty() && !scientificName.equals("Unknown") &&
+                    !scientificName.equalsIgnoreCase("null") && !scientificName.equals("There are")) {
+                score += 30;
             }
 
-            // Family information
             String family = result.optString("family", "").trim();
-            if (!family.isEmpty() &&
-                    !family.equals("Unknown") &&
-                    !family.equals("Unknown Family") &&
-                    !family.equalsIgnoreCase("null")) {
-                score += 15;
+            if (!family.isEmpty() && !family.equals("Unknown") && !family.equalsIgnoreCase("null")) {
+                score += 20;
             }
 
-            // Habitat information
-            String habitat = result.optString("habitat", "").trim();
-            if (!habitat.isEmpty() && !habitat.equals("Various environments") && !habitat.equalsIgnoreCase("null")) {
-                score += 10;
-            }
-
-            // Plant name should exist and not be generic
-            String plantName = result.optString("plant_name", "").trim();
-            if (!plantName.isEmpty() && !plantName.equals("Unknown Plant")) {
-                score += 10;
-            }
-
-            // Bonus for knowledge graph data (usually more reliable)
+            // Prefer knowledge graph data over auto-generated
             boolean autoGenerated = result.optBoolean("auto_generated", false);
             if (!autoGenerated) {
-                score += 15; // Non-auto-generated data is typically more curated
+                score += 25;
             }
 
-            Log.d(TAG, "Score breakdown for '" + plantName + "': " +
-                    "uses=" + (!uses.isEmpty() ? "✓" : "✗") +
-                    " medicinal=" + (!medicinalProperties.isEmpty() ? "✓" : "✗") +
-                    " scientific=" + (!scientificName.isEmpty() ? "✓" : "✗") +
-                    " family=" + (!family.isEmpty() ? "✓" : "✗") +
-                    " total=" + score);
+            Log.d(TAG, "Final score: " + score + " for " + result.optString("plant_name", "Unknown"));
 
         } catch (Exception e) {
             Log.e(TAG, "Error calculating result score: " + e.getMessage());
-            return 0;
+            return -100; // Return very low score for problematic results
         }
 
         return score;
     }
+
+    /**
+     * Additional method to validate if a result has meaningful uses
+     */
+    private boolean hasmeaningfulUses(JSONObject result) {
+        try {
+            String uses = result.optString("uses", "").trim();
+
+            if (uses.isEmpty() || uses.equalsIgnoreCase("null")) {
+                return false;
+            }
+
+            String lowerUses = uses.toLowerCase();
+
+            // Check for generic/meaningless content
+            String[] genericPhrases = {
+                    "uses to be researched",
+                    "traditional and ornamental uses",
+                    "information not available",
+                    "not available",
+                    "a rose is either",
+                    "they form"
+            };
+
+            for (String phrase : genericPhrases) {
+                if (lowerUses.contains(phrase)) {
+                    return false;
+                }
+            }
+
+            // Must have minimum length to be meaningful
+            return uses.length() >= 30;
+
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Method to filter results to only those with meaningful uses before scoring
+     */
+    private JSONObject findResultWithBestUses(JSONArray results) {
+        try {
+            // First pass: collect only results with meaningful uses
+            ArrayList<JSONObject> meaningfulResults = new ArrayList<>();
+
+            for (int i = 0; i < results.length(); i++) {
+                JSONObject result = results.getJSONObject(i);
+                if (hasmeaningfulUses(result)) {
+                    meaningfulResults.add(result);
+                    Log.d(TAG, "Found meaningful uses in: " + result.optString("plant_name", "Unknown"));
+                }
+            }
+
+            if (meaningfulResults.isEmpty()) {
+                Log.w(TAG, "No results with meaningful uses found");
+                return results.length() > 0 ? results.getJSONObject(0) : null;
+            }
+
+            // Second pass: find the best among meaningful results
+            JSONObject bestResult = null;
+            int bestScore = -1;
+
+            for (JSONObject result : meaningfulResults) {
+                int score = calculateResultScore(result);
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestResult = result;
+                }
+            }
+
+            Log.d(TAG, "Selected result with meaningful uses: " +
+                    (bestResult != null ? bestResult.optString("plant_name", "Unknown") : "None"));
+
+            return bestResult;
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error in findResultWithBestUses: " + e.getMessage());
+            try {
+                return results.getJSONObject(0);
+            } catch (Exception fallbackError) {
+                return null;
+            }
+        }
+    }
+
+    /**
+     * Method to filter results to only those with meaningful uses before scoring
+     */
 
     private String getFallbackUses(String serverUses) {
         StringBuilder fallbackUses = new StringBuilder();
@@ -711,12 +1009,7 @@ public class ResultActivity extends AppCompatActivity {
 
         fallbackUses.append("This plant may have medicinal and traditional uses. ")
                 .append("Many plants have been used throughout history for various therapeutic purposes. ")
-                .append("Different cultures and regions may have unique applications for this species.\n\n")
-                .append("⚠️ Important Safety Information:\n")
-                .append("• Always consult with qualified healthcare practitioners before using any plant medicinally\n")
-                .append("• Proper plant identification is crucial for safety\n")
-                .append("• Some plants may have toxic compounds or interactions with medications\n")
-                .append("• Traditional uses do not guarantee safety or efficacy");
+                .append("Different cultures and regions may have unique applications for this species.\n\n");
 
         return fallbackUses.toString();
     }
@@ -768,21 +1061,24 @@ public class ResultActivity extends AppCompatActivity {
         });
     }
 
-    private void displayIdentificationStatus(boolean isRealIdentification, double confidence) {
+    private void displayIdentificationStatus(boolean isRealIdentification, double confidence, boolean isFromSearchRoute) {
+        if (isFromSearchRoute) {
+            identificationStatusText.setVisibility(View.GONE);
+            return;
+        }
+
+        identificationStatusText.setVisibility(View.VISIBLE);
+
         if (isRealIdentification) {
             if (confidence > 0.8) {
                 identificationStatusText.setText("✓ High confidence identification from AI model");
-                identificationStatusCard.setCardBackgroundColor(getResources().getColor(android.R.color.holo_green_light));
             } else if (confidence > 0.5) {
                 identificationStatusText.setText("⚠ Medium confidence identification from AI model");
-                identificationStatusCard.setCardBackgroundColor(getResources().getColor(android.R.color.holo_orange_light));
             } else {
                 identificationStatusText.setText("⚠ Low confidence identification from AI model");
-                identificationStatusCard.setCardBackgroundColor(getResources().getColor(android.R.color.holo_red_light));
             }
         } else {
-            identificationStatusText.setText("ℹ Sample data - Connect to server for AI identification");
-            identificationStatusCard.setCardBackgroundColor(getResources().getColor(android.R.color.darker_gray));
+            identificationStatusText.setText("");  // or hide it
         }
     }
 
@@ -855,7 +1151,7 @@ public class ResultActivity extends AppCompatActivity {
         if (viewImagesButton != null) {
             if (hasDbImages && dbImageUrls != null && !dbImageUrls.isEmpty()) {
                 viewImagesButton.setVisibility(View.VISIBLE);
-                viewImagesButton.setText("View " + dbImageUrls.size() + " Images 📸");
+                viewImagesButton.setText("View " + " Images 📸");
                 viewImagesButton.setOnClickListener(v -> openImageGallery());
             } else {
                 viewImagesButton.setVisibility(View.GONE);

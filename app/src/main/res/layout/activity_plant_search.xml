@@ -61,7 +61,7 @@
             android:id="@+id/searchEditText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Search for plants (e.g., Tulsi, Neem, Rose)"
+            android:hint="Search for plants/disease"
             android:inputType="text"
             android:maxLines="1"
             android:imeOptions="actionSearch"

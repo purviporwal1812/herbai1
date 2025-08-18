@@ -5,7 +5,6 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
-import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -44,6 +43,7 @@ import okhttp3.Response;
 public class PlantImageGalleryActivity extends AppCompatActivity {
     private static final String TAG = "PlantImageGallery";
     private static final String BASE_URL = "https://serverv1-1.onrender.com";
+    private static final int MAX_IMAGES = 2; // Limit to 2 images
 
     // UI Components
     private SwitchMaterial themeSwitch;
@@ -124,7 +124,13 @@ public class PlantImageGalleryActivity extends AppCompatActivity {
         ArrayList<String> preloadedImages = getIntent().getStringArrayListExtra("preloaded_images");
         if (preloadedImages != null && !preloadedImages.isEmpty()) {
             Log.d(TAG, "Found " + preloadedImages.size() + " preloaded images");
-            imageUrls = new ArrayList<>(preloadedImages);
+            // Limit preloaded images to MAX_IMAGES
+            imageUrls = new ArrayList<>();
+            int limit = Math.min(preloadedImages.size(), MAX_IMAGES);
+            for (int i = 0; i < limit; i++) {
+                imageUrls.add(preloadedImages.get(i));
+            }
+            Log.d(TAG, "Limited to " + imageUrls.size() + " preloaded images");
         }
 
         // Set plant information
@@ -200,48 +206,162 @@ public class PlantImageGalleryActivity extends AppCompatActivity {
 
     private void updateImageDisplay() {
         imageAdapter.notifyDataSetChanged();
-        imageCountTextView.setText("Found " + imageUrls.size() + " images");
+        imageCountTextView.setText("Showing " + imageUrls.size() + " images");
         imageCountTextView.setVisibility(View.VISIBLE);
         noImagesTextView.setVisibility(View.GONE);
     }
 
     private List<String> fetchPlantImagesFromBackend() {
-        Set<String> uniqueImages = new HashSet<>(); // Use Set to avoid duplicates
+        Set<String> uniqueImages = new HashSet<>();
         List<String> finalImages = new ArrayList<>();
 
         try {
-            // Method 1: Try smart_search endpoint first
+            // Method 1: Try smart_search endpoint first - but only for the main identified plant
             List<String> smartSearchImages = querySmartSearchAPI(plantName);
             if (smartSearchImages != null && !smartSearchImages.isEmpty()) {
                 uniqueImages.addAll(smartSearchImages);
-                Log.d(TAG, "Found " + smartSearchImages.size() + " images from smart_search");
+                Log.d(TAG, "Found " + smartSearchImages.size() + " images from smart_search for main plant");
             }
 
-            // Method 2: Try with scientific name if different
+            // Method 2: Try with scientific name if different - but still only for main plant
             if (scientificName != null && !scientificName.equals(plantName) && !scientificName.equals("Unknown")) {
                 List<String> scientificImages = querySmartSearchAPI(scientificName);
                 if (scientificImages != null && !scientificImages.isEmpty()) {
                     uniqueImages.addAll(scientificImages);
-                    Log.d(TAG, "Found additional images using scientific name");
+                    Log.d(TAG, "Found additional images using scientific name for main plant");
                 }
             }
 
-            // Method 3: Try prediction endpoint with a dummy image (to get db_image_urls)
-            List<String> predictImages = tryPredictEndpointForImages();
+            // Method 3: Try prediction endpoint - filter for ONLY the first predicted plant
+            List<String> predictImages = tryPredictEndpointForFirstPlantOnly();
             if (predictImages != null && !predictImages.isEmpty()) {
                 uniqueImages.addAll(predictImages);
-                Log.d(TAG, "Found additional images from predict endpoint");
+                Log.d(TAG, "Found additional images from predict endpoint for main plant only");
             }
 
+            // Limit to MAX_IMAGES
             finalImages.addAll(uniqueImages);
-            Log.d(TAG, "Total unique images collected: " + finalImages.size());
+            if (finalImages.size() > MAX_IMAGES) {
+                finalImages = finalImages.subList(0, MAX_IMAGES);
+                Log.d(TAG, "Limited to " + MAX_IMAGES + " images for display");
+            }
 
+            Log.d(TAG, "Total unique images collected for main plant: " + finalImages.size());
             return finalImages;
 
         } catch (Exception e) {
             Log.e(TAG, "Error fetching images from backend: " + e.getMessage());
             return null;
         }
+    }
+
+    private List<String> tryPredictEndpointForFirstPlantOnly() {
+        List<String> imageUrls = new ArrayList<>();
+
+        try {
+            File dummyImageFile = createDummyImageFile();
+            if (dummyImageFile == null) {
+                Log.w(TAG, "Could not create dummy image file");
+                return imageUrls;
+            }
+
+            Log.d(TAG, "Trying predict endpoint with dummy image to get images for main plant only");
+
+            OkHttpClient client = new OkHttpClient.Builder()
+                    .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                    .build();
+
+            RequestBody fileBody = RequestBody.create(dummyImageFile, MediaType.parse("image/jpeg"));
+            RequestBody requestBody = new MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("file", "dummy.jpg", fileBody)
+                    .build();
+
+            Request request = new Request.Builder()
+                    .url(BASE_URL + "/predict")
+                    .post(requestBody)
+                    .addHeader("User-Agent", "HerbAI-Android/1.0")
+                    .build();
+
+            try (Response response = client.newCall(request).execute()) {
+                if (response.isSuccessful() && response.body() != null) {
+                    String responseBody = response.body().string();
+                    Log.d(TAG, "Predict endpoint response received");
+
+                    imageUrls.addAll(parsePredictResponseForFirstPlantOnly(responseBody));
+
+                    // Clean up dummy file
+                    if (dummyImageFile.exists()) {
+                        dummyImageFile.delete();
+                    }
+                } else {
+                    Log.w(TAG, "Predict endpoint failed with code: " + response.code());
+                }
+            }
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error trying predict endpoint: " + e.getMessage());
+        }
+
+        return imageUrls;
+    }
+
+    private List<String> parsePredictResponseForFirstPlantOnly(String jsonResponse) {
+        List<String> imageUrls = new ArrayList<>();
+
+        try {
+            JSONObject jsonObject = new JSONObject(jsonResponse);
+
+            // Get the main predicted species name
+            String mainSpecies = jsonObject.optString("species", "");
+
+            // Parse db_image_urls - these should be for the main predicted plant
+            if (jsonObject.has("db_image_urls")) {
+                JSONArray dbImageUrls = jsonObject.getJSONArray("db_image_urls");
+                Log.d(TAG, "Found " + dbImageUrls.length() + " db_image_urls for main plant");
+
+                // Limit to MAX_IMAGES
+                int limit = Math.min(dbImageUrls.length(), MAX_IMAGES);
+                for (int i = 0; i < limit; i++) {
+                    String imageUrl = dbImageUrls.getString(i);
+                    if (isValidImageUrl(imageUrl)) {
+                        imageUrls.add(imageUrl);
+                        Log.d(TAG, "Added db image " + (i+1) + "/" + MAX_IMAGES + ": " + imageUrl);
+                    }
+                }
+            }
+
+            // If we don't have enough images yet, check db_matches - but ONLY the first one
+            if (imageUrls.size() < MAX_IMAGES && jsonObject.has("db_matches")) {
+                JSONArray dbMatches = jsonObject.getJSONArray("db_matches");
+                Log.d(TAG, "Found db_matches, processing only the first match");
+
+                // Only process the FIRST match (highest confidence prediction)
+                if (dbMatches.length() > 0) {
+                    JSONObject firstMatch = dbMatches.getJSONObject(0);
+                    if (firstMatch.has("image_urls")) {
+                        JSONArray matchImages = firstMatch.getJSONArray("image_urls");
+
+                        // Add images until we reach MAX_IMAGES
+                        for (int j = 0; j < matchImages.length() && imageUrls.size() < MAX_IMAGES; j++) {
+                            String imageUrl = matchImages.getString(j);
+                            if (isValidImageUrl(imageUrl) && !imageUrls.contains(imageUrl)) {
+                                imageUrls.add(imageUrl);
+                                Log.d(TAG, "Added first match image " + imageUrls.size() + "/" + MAX_IMAGES + ": " + imageUrl);
+                            }
+                        }
+                    }
+                }
+            }
+
+            Log.d(TAG, "Total images collected for main plant only: " + imageUrls.size());
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error parsing predict response for main plant: " + e.getMessage());
+        }
+
+        return imageUrls;
     }
 
     private List<String> querySmartSearchAPI(String queryName) {
@@ -309,7 +429,7 @@ public class PlantImageGalleryActivity extends AppCompatActivity {
 
         try {
             JSONObject jsonObject = new JSONObject(jsonResponse);
-            Log.d(TAG, "Parsing smart search response...");
+            Log.d(TAG, "Parsing smart search response for main plant only...");
 
             // Check if search was successful
             boolean success = jsonObject.optBoolean("success", false);
@@ -318,126 +438,73 @@ public class PlantImageGalleryActivity extends AppCompatActivity {
                 return imageUrls;
             }
 
-            // Parse results array from smart_search endpoint
+            // Parse results array - but focus on the BEST match only
             JSONArray results = jsonObject.optJSONArray("results");
             if (results != null && results.length() > 0) {
-                Log.d(TAG, "Found " + results.length() + " search results");
+                Log.d(TAG, "Found " + results.length() + " search results, using only the first/best match");
 
-                for (int i = 0; i < results.length(); i++) {
-                    JSONObject result = results.getJSONObject(i);
+                // Only process the FIRST result (best match for our plant)
+                JSONObject firstResult = results.getJSONObject(0);
+                String resultPlantName = firstResult.optString("plant_name", "");
+                Log.d(TAG, "Processing images only for: " + resultPlantName);
 
-                    // Look for image_urls in each result
-                    if (result.has("image_urls")) {
-                        JSONArray resultImages = result.getJSONArray("image_urls");
-                        Log.d(TAG, "Result " + i + " has " + resultImages.length() + " images");
+                // Look for image_urls in the first result only - limit to MAX_IMAGES
+                if (firstResult.has("image_urls")) {
+                    JSONArray resultImages = firstResult.getJSONArray("image_urls");
+                    Log.d(TAG, "First result has " + resultImages.length() + " images");
 
-                        for (int j = 0; j < resultImages.length(); j++) {
-                            String imageUrl = resultImages.getString(j);
-                            if (isValidImageUrl(imageUrl)) {
-                                imageUrls.add(imageUrl);
-                                Log.d(TAG, "Added image: " + imageUrl);
-                            }
+                    int limit = Math.min(resultImages.length(), MAX_IMAGES);
+                    for (int j = 0; j < limit; j++) {
+                        String imageUrl = resultImages.getString(j);
+                        if (isValidImageUrl(imageUrl)) {
+                            imageUrls.add(imageUrl);
+                            Log.d(TAG, "Added image " + (j+1) + "/" + MAX_IMAGES + ": " + imageUrl);
                         }
-                    } else {
-                        Log.d(TAG, "Result " + i + " has no image_urls field");
                     }
                 }
             } else {
                 Log.w(TAG, "No results array found in smart search response");
             }
 
-            // Also check for direct db_image_urls field (in case the response format includes it)
-            if (jsonObject.has("db_image_urls")) {
+            // Also check for direct db_image_urls field (should be for main plant) - limit to MAX_IMAGES
+            if (imageUrls.size() < MAX_IMAGES && jsonObject.has("db_image_urls")) {
                 JSONArray dbImageUrls = jsonObject.getJSONArray("db_image_urls");
-                Log.d(TAG, "Found direct db_image_urls with " + dbImageUrls.length() + " images");
+                Log.d(TAG, "Found direct db_image_urls with " + dbImageUrls.length() + " images for main plant");
 
-                for (int i = 0; i < dbImageUrls.length(); i++) {
+                for (int i = 0; i < dbImageUrls.length() && imageUrls.size() < MAX_IMAGES; i++) {
                     String imageUrl = dbImageUrls.getString(i);
                     if (isValidImageUrl(imageUrl) && !imageUrls.contains(imageUrl)) {
                         imageUrls.add(imageUrl);
-                        Log.d(TAG, "Added db image: " + imageUrl);
+                        Log.d(TAG, "Added db image " + imageUrls.size() + "/" + MAX_IMAGES + ": " + imageUrl);
                     }
                 }
             }
 
-            // Check for db_matches (similar to predict endpoint format)
-            if (jsonObject.has("db_matches")) {
+            // Check for db_matches - but ONLY the first one and limit to MAX_IMAGES
+            if (imageUrls.size() < MAX_IMAGES && jsonObject.has("db_matches")) {
                 JSONArray dbMatches = jsonObject.getJSONArray("db_matches");
-                Log.d(TAG, "Found db_matches with " + dbMatches.length() + " matches");
+                Log.d(TAG, "Found db_matches, processing only the first match");
 
-                for (int i = 0; i < dbMatches.length(); i++) {
-                    JSONObject match = dbMatches.getJSONObject(i);
-                    if (match.has("image_urls")) {
-                        JSONArray matchImages = match.getJSONArray("image_urls");
-                        for (int j = 0; j < matchImages.length(); j++) {
+                // Only process the FIRST match
+                if (dbMatches.length() > 0) {
+                    JSONObject firstMatch = dbMatches.getJSONObject(0);
+                    if (firstMatch.has("image_urls")) {
+                        JSONArray matchImages = firstMatch.getJSONArray("image_urls");
+                        for (int j = 0; j < matchImages.length() && imageUrls.size() < MAX_IMAGES; j++) {
                             String imageUrl = matchImages.getString(j);
                             if (isValidImageUrl(imageUrl) && !imageUrls.contains(imageUrl)) {
                                 imageUrls.add(imageUrl);
-                                Log.d(TAG, "Added match image: " + imageUrl);
+                                Log.d(TAG, "Added first match image " + imageUrls.size() + "/" + MAX_IMAGES + ": " + imageUrl);
                             }
                         }
                     }
                 }
             }
 
-            Log.d(TAG, "Total images parsed from smart search: " + imageUrls.size());
+            Log.d(TAG, "Total images parsed for main plant only: " + imageUrls.size());
 
         } catch (Exception e) {
             Log.e(TAG, "Error parsing smart search response: " + e.getMessage());
-        }
-
-        return imageUrls;
-    }
-
-    private List<String> tryPredictEndpointForImages() {
-        List<String> imageUrls = new ArrayList<>();
-
-        try {
-            // Create a minimal dummy image file for prediction
-            // This is a workaround to get the db_image_urls from the predict endpoint
-            File dummyImageFile = createDummyImageFile();
-            if (dummyImageFile == null) {
-                Log.w(TAG, "Could not create dummy image file");
-                return imageUrls;
-            }
-
-            Log.d(TAG, "Trying predict endpoint with dummy image to get db_image_urls");
-
-            OkHttpClient client = new OkHttpClient.Builder()
-                    .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-                    .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
-                    .build();
-
-            RequestBody fileBody = RequestBody.create(dummyImageFile, MediaType.parse("image/jpeg"));
-            RequestBody requestBody = new MultipartBody.Builder()
-                    .setType(MultipartBody.FORM)
-                    .addFormDataPart("file", "dummy.jpg", fileBody)
-                    .build();
-
-            Request request = new Request.Builder()
-                    .url(BASE_URL + "/predict")
-                    .post(requestBody)
-                    .addHeader("User-Agent", "HerbAI-Android/1.0")
-                    .build();
-
-            try (Response response = client.newCall(request).execute()) {
-                if (response.isSuccessful() && response.body() != null) {
-                    String responseBody = response.body().string();
-                    Log.d(TAG, "Predict endpoint response received");
-
-                    imageUrls.addAll(parsePredictResponse(responseBody));
-
-                    // Clean up dummy file
-                    if (dummyImageFile.exists()) {
-                        dummyImageFile.delete();
-                    }
-                } else {
-                    Log.w(TAG, "Predict endpoint failed with code: " + response.code());
-                }
-            }
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error trying predict endpoint: " + e.getMessage());
         }
 
         return imageUrls;
@@ -485,12 +552,13 @@ public class PlantImageGalleryActivity extends AppCompatActivity {
         try {
             JSONObject jsonObject = new JSONObject(jsonResponse);
 
-            // Parse db_image_urls from predict response
+            // Parse db_image_urls from predict response - limit to MAX_IMAGES
             if (jsonObject.has("db_image_urls")) {
                 JSONArray dbImageUrls = jsonObject.getJSONArray("db_image_urls");
                 Log.d(TAG, "Found " + dbImageUrls.length() + " db_image_urls in predict response");
 
-                for (int i = 0; i < dbImageUrls.length(); i++) {
+                int limit = Math.min(dbImageUrls.length(), MAX_IMAGES);
+                for (int i = 0; i < limit; i++) {
                     String imageUrl = dbImageUrls.getString(i);
                     if (isValidImageUrl(imageUrl)) {
                         imageUrls.add(imageUrl);
@@ -498,16 +566,17 @@ public class PlantImageGalleryActivity extends AppCompatActivity {
                 }
             }
 
-            // Parse db_matches from predict response
-            if (jsonObject.has("db_matches")) {
+            // Parse db_matches from predict response - but ONLY the first match and limit images
+            if (imageUrls.size() < MAX_IMAGES && jsonObject.has("db_matches")) {
                 JSONArray dbMatches = jsonObject.getJSONArray("db_matches");
                 Log.d(TAG, "Found " + dbMatches.length() + " db_matches in predict response");
 
-                for (int i = 0; i < dbMatches.length(); i++) {
-                    JSONObject match = dbMatches.getJSONObject(i);
-                    if (match.has("image_urls")) {
-                        JSONArray matchImages = match.getJSONArray("image_urls");
-                        for (int j = 0; j < matchImages.length(); j++) {
+                // Only process the FIRST match (highest confidence)
+                if (dbMatches.length() > 0) {
+                    JSONObject firstMatch = dbMatches.getJSONObject(0);
+                    if (firstMatch.has("image_urls")) {
+                        JSONArray matchImages = firstMatch.getJSONArray("image_urls");
+                        for (int j = 0; j < matchImages.length() && imageUrls.size() < MAX_IMAGES; j++) {
                             String imageUrl = matchImages.getString(j);
                             if (isValidImageUrl(imageUrl) && !imageUrls.contains(imageUrl)) {
                                 imageUrls.add(imageUrl);
@@ -554,7 +623,6 @@ public class PlantImageGalleryActivity extends AppCompatActivity {
                 "\n\nImages may not be available in the database for this plant species." +
                 "\n\nTry refreshing or check if the plant name is correct.");
     }
-
 
     @Override
     protected void onDestroy() {
