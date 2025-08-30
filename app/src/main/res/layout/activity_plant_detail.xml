@@ -1,11 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true"
-    tools:context=".PlantDetailActivity">
+    android:background="?android:attr/colorBackground">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -13,38 +11,45 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <!-- Header -->
+        <!-- Header Section -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="24dp">
+            android:layout_marginBottom="16dp">
 
-            <TextView
+            <Button
+                android:id="@+id/backButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:text="←"
+                android:textSize="18sp"
+                android:textColor="?android:attr/textColorPrimary" />
+
+            <View
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Plant Details"
-                android:textSize="24sp"
-                android:textStyle="bold" />
+                android:layout_height="1dp"
+                android:layout_weight="1" />
 
+            <!-- Theme Switch -->
             <com.google.android.material.switchmaterial.SwitchMaterial
                 android:id="@+id/themeSwitch"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
                 android:text="Dark Mode"
-                android:textSize="12sp" />
-
+                android:textColor="?android:attr/textColorPrimary" />
         </LinearLayout>
 
         <!-- Plant Name Card -->
-        <com.google.android.material.card.MaterialCardView
+        <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
+            app:cardElevation="6dp"
             app:cardCornerRadius="12dp"
-            app:cardElevation="4dp">
+            app:cardBackgroundColor="?android:attr/colorBackground">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -57,9 +62,9 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Plant Name"
-                    android:textSize="28sp"
+                    android:textSize="24sp"
                     android:textStyle="bold"
-                    android:textColor="?attr/colorPrimary"
+                    android:textColor="?android:attr/textColorPrimary"
                     android:gravity="center"
                     android:layout_marginBottom="8dp" />
 
@@ -67,219 +72,242 @@
                     android:id="@+id/scientificNameTextView"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Scientific Name: Unknown"
+                    android:text="Scientific Name"
                     android:textSize="16sp"
                     android:textStyle="italic"
-                    android:gravity="center" />
-
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:gravity="center"
+                    android:visibility="gone" />
             </LinearLayout>
+        </androidx.cardview.widget.CardView>
 
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Taxonomy Card -->
-        <com.google.android.material.card.MaterialCardView
+        <!-- Plant Information Card -->
+        <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
+            app:cardElevation="6dp"
             app:cardCornerRadius="12dp"
-            app:cardElevation="4dp">
+            app:cardBackgroundColor="?android:attr/colorBackground">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="20dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="🧬 Taxonomy"
+                    android:text="Plant Information"
                     android:textSize="18sp"
                     android:textStyle="bold"
+                    android:textColor="?android:attr/textColorPrimary"
                     android:layout_marginBottom="12dp" />
 
                 <TextView
-                    android:id="@+id/taxonomyTextView"
+                    android:id="@+id/familyTextView"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Kingdom: Plantae\nFamily: Unknown\nGenus: Unknown\nSpecies: Unknown"
+                    android:text="Family: Unknown"
                     android:textSize="14sp"
-                    android:lineSpacingExtra="4dp" />
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:layout_marginBottom="8dp"
+                    android:visibility="gone" />
 
+                <TextView
+                    android:id="@+id/habitatTextView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Habitat: Unknown"
+                    android:textSize="14sp"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:layout_marginBottom="8dp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/genusTextView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Genus: Unknown"
+                    android:textSize="14sp"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:layout_marginBottom="8dp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/dataSourceTextView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Source: Knowledge Database"
+                    android:textSize="12sp"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:layout_marginTop="8dp" />
             </LinearLayout>
+        </androidx.cardview.widget.CardView>
 
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Medicinal Properties Card -->
-        <com.google.android.material.card.MaterialCardView
+        <!-- Medicinal Uses Card -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/usesCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
+            app:cardElevation="6dp"
             app:cardCornerRadius="12dp"
-            app:cardElevation="4dp">
+            app:cardBackgroundColor="?android:attr/colorBackground">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="20dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="💊 Medicinal Properties"
+                    android:text="Medicinal Uses and Properties"
                     android:textSize="18sp"
                     android:textStyle="bold"
-                    android:layout_marginBottom="12dp" />
-
-                <TextView
-                    android:id="@+id/medicinalPropertiesTextView"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Information not available"
-                    android:textSize="14sp"
-                    android:lineSpacingExtra="4dp" />
-
-            </LinearLayout>
-
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Uses Card -->
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="4dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="🌿 Uses &amp; Applications"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
+                    android:textColor="?android:attr/textColorPrimary"
                     android:layout_marginBottom="12dp" />
 
                 <TextView
                     android:id="@+id/usesTextView"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Uses to be researched"
+                    android:text="Loading plant uses..."
                     android:textSize="14sp"
+                    android:textColor="?android:attr/textColorPrimary"
                     android:lineSpacingExtra="4dp" />
 
-            </LinearLayout>
-
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Habitat Card -->
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="4dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="16dp">
-
-                <TextView
-                    android:layout_width="match_parent"
+                <Button
+                    android:id="@+id/readMoreButton"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="🏞️ Habitat"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="12dp" />
-
-                <TextView
-                    android:id="@+id/habitatTextView"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Various environments"
-                    android:textSize="14sp"
-                    android:lineSpacingExtra="4dp" />
-
+                    android:text="Read More"
+                    android:textSize="12sp"
+                    android:layout_marginTop="8dp"
+                    android:visibility="gone"
+                    style="?android:attr/borderlessButtonStyle" />
             </LinearLayout>
-
-        </com.google.android.material.card.MaterialCardView>
+        </androidx.cardview.widget.CardView>
 
         <!-- Chemical Components Card -->
-        <com.google.android.material.card.MaterialCardView
+        <androidx.cardview.widget.CardView
+            android:id="@+id/chemicalCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
+            app:cardElevation="6dp"
             app:cardCornerRadius="12dp"
-            app:cardElevation="4dp">
+            app:cardBackgroundColor="?android:attr/colorBackground"
+            android:visibility="gone">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="16dp">
+                android:padding="20dp">
 
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="🧪 Chemical Components"
+                    android:text="Active Compounds"
                     android:textSize="18sp"
                     android:textStyle="bold"
+                    android:textColor="?android:attr/textColorPrimary"
                     android:layout_marginBottom="12dp" />
 
                 <TextView
                     android:id="@+id/chemicalComponentsTextView"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Components under study"
                     android:textSize="14sp"
+                    android:textColor="?android:attr/textColorPrimary"
                     android:lineSpacingExtra="4dp" />
-
             </LinearLayout>
+        </androidx.cardview.widget.CardView>
 
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Data Source Card -->
-        <com.google.android.material.card.MaterialCardView
+        <!-- Action Buttons Card -->
+        <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
+            app:cardElevation="6dp"
             app:cardCornerRadius="12dp"
-            app:cardElevation="4dp">
+            app:cardBackgroundColor="?android:attr/colorBackground">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Actions"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="?android:attr/textColorPrimary"
+                    android:layout_marginBottom="12dp" />
+
+                <Button
+                    android:id="@+id/viewImagesButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="View Plant Images"
+                    android:textSize="14sp"
+                    android:layout_marginBottom="8dp"
+                    android:drawableStart="@android:drawable/ic_menu_gallery"
+                    android:drawablePadding="8dp"
+                    style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                <Button
+                    android:id="@+id/searchMoreButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Search More Information"
+                    android:textSize="14sp"
+                    android:drawableStart="@android:drawable/ic_menu_search"
+                    android:drawablePadding="8dp"
+                    style="@style/Widget.Material3.Button.OutlinedButton" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- Warning Card -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:cardElevation="4dp"
+            app:cardCornerRadius="8dp"
+            app:cardBackgroundColor="#FFF3E0">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
                 android:padding="16dp">
 
                 <TextView
-                    android:layout_width="match_parent"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="📊 Data Information"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    android:layout_marginBottom="12dp" />
+                    android:text="⚠️"
+                    android:textSize="20sp"
+                    android:layout_marginEnd="12dp"
+                    android:layout_gravity="center_vertical" />
 
                 <TextView
-                    android:id="@+id/dataSourceTextView"
-                    android:layout_width="match_parent"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:text="Data Source: Knowledge Graph"
+                    android:layout_weight="1"
+                    android:text="Disclaimer: This information is for educational purposes only. Always consult with healthcare professionals before using plants medicinally."
                     android:textSize="12sp"
-                    android:lineSpacingExtra="4dp" />
-
+                    android:textColor="#E65100"
+                    android:lineSpacingExtra="2dp" />
             </LinearLayout>
-
-        </com.google.android.material.card.MaterialCardView>
+        </androidx.cardview.widget.CardView>
 
     </LinearLayout>
-
 </ScrollView>

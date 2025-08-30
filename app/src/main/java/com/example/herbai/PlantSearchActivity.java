@@ -12,6 +12,7 @@ import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
+import java.util.ArrayList;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
@@ -160,14 +161,18 @@ public class PlantSearchActivity extends AppCompatActivity {
         });
     }
 
+    // Replace the queryBackendAPI method in PlantSearchActivity with this fixed version
     private String queryBackendAPI(String plantName) {
         HttpURLConnection connection = null;
         BufferedReader reader = null;
 
         try {
-            String encodedPlantName = URLEncoder.encode(plantName.trim(), "UTF-8");
+            // Use %20 encoding instead of + encoding for spaces to match browser behavior
+            String encodedPlantName = plantName.trim().replace(" ", "%20");
             String urlString = BASE_API_URL + "/smart_search/" + encodedPlantName;
 
+            Log.d(TAG, "Original plant name: " + plantName);
+            Log.d(TAG, "Encoded plant name: " + encodedPlantName);
             Log.d(TAG, "Querying backend API: " + urlString);
 
             URL url = new URL(urlString);
@@ -196,11 +201,27 @@ public class PlantSearchActivity extends AppCompatActivity {
                 return jsonResponse;
             } else {
                 Log.w(TAG, "Backend API returned error code: " + responseCode);
+
+                // Also log the error response body if available
+                try {
+                    BufferedReader errorReader = new BufferedReader(new InputStreamReader(connection.getErrorStream()));
+                    StringBuilder errorResponse = new StringBuilder();
+                    String errorLine;
+                    while ((errorLine = errorReader.readLine()) != null) {
+                        errorResponse.append(errorLine);
+                    }
+                    Log.w(TAG, "Error response body: " + errorResponse.toString());
+                    errorReader.close();
+                } catch (Exception e) {
+                    Log.e(TAG, "Could not read error response: " + e.getMessage());
+                }
+
                 return null;
             }
 
         } catch (Exception e) {
             Log.e(TAG, "Error querying backend API: " + e.getMessage());
+            e.printStackTrace();
             return null;
         } finally {
             if (reader != null) {
@@ -216,6 +237,57 @@ public class PlantSearchActivity extends AppCompatActivity {
         }
     }
 
+    // Also update the showPlantDetails method to pass the correct data structure to ResultActivity
+    private void showPlantDetails(JSONObject plantData) {
+        try {
+            Intent intent = new Intent(PlantSearchActivity.this, PlantDetailActivity.class);
+
+            // Extract and pass plant information
+            String plantName = plantData.optString("plant_name", "Unknown Plant");
+            String scientificName = plantData.optString("scientific_name", "");
+            String family = plantData.optString("family", "");
+            String uses = plantData.optString("uses", "");
+            String medicinalProperties = plantData.optString("medicinal_properties", "");
+            String chemicalComponents = plantData.optString("chemical_components", "");
+            String habitat = plantData.optString("habitat", "");
+
+            Log.d(TAG, "=== PASSING DATA TO RESULT ACTIVITY ===");
+            Log.d(TAG, "Plant name: " + plantName);
+            Log.d(TAG, "Scientific name: " + scientificName);
+            Log.d(TAG, "Family: " + family);
+            Log.d(TAG, "Uses: " + uses);
+            Log.d(TAG, "Medicinal properties: " + medicinalProperties);
+            Log.d(TAG, "Chemical components: " + chemicalComponents);
+            Log.d(TAG, "Habitat: " + habitat);
+
+            // Pass data to ResultActivity using the same structure as MainActivity
+            intent.putExtra("plantName", plantName);
+            intent.putExtra("scientificName", scientificName);
+            intent.putExtra("family", family);
+            intent.putExtra("habitat", habitat);
+            intent.putExtra("uses", uses); // Main uses field
+            intent.putExtra("confidence", 0.95); // High confidence for database results
+            intent.putExtra("isRealIdentification", false); // This is from database search
+            intent.putExtra("isFromSearchRoute", true); // This is from search route
+
+            // Database information fields (same as MainActivity structure)
+            intent.putExtra("databaseUses", uses);
+            intent.putExtra("databaseMedicinalProperties", medicinalProperties);
+            intent.putExtra("databaseChemicalComponents", chemicalComponents);
+
+            // Empty arrays for images and probable plants
+            intent.putStringArrayListExtra("dbImageUrls", new ArrayList<String>());
+            intent.putStringArrayListExtra("probablePlants", new ArrayList<String>());
+            intent.putExtra("hasDbImages", false);
+
+            startActivity(intent);
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error showing plant details: " + e.getMessage());
+            e.printStackTrace();
+            Toast.makeText(this, "Error opening plant details", Toast.LENGTH_SHORT).show();
+        }
+    }
     private void parseAndDisplayResults(String jsonResponse, String originalQuery) {
         try {
             JSONObject jsonObject = new JSONObject(jsonResponse);
@@ -355,51 +427,6 @@ public class PlantSearchActivity extends AppCompatActivity {
 
         } catch (Exception e) {
             Log.e(TAG, "Error creating result card: " + e.getMessage());
-        }
-    }
-
-    private void showPlantDetails(JSONObject plantData) {
-        try {
-            Intent intent = new Intent(PlantSearchActivity.this, ResultActivity.class);
-
-            // Extract and pass plant information
-            String plantName = plantData.optString("plant_name", "Unknown Plant");
-            String scientificName = plantData.optString("scientific_name", "");
-            String family = plantData.optString("family", "");
-            String uses = plantData.optString("uses", "");
-            String medicinalProperties = plantData.optString("medicinal_properties", "");
-            String habitat = plantData.optString("habitat", "");
-
-            // Build comprehensive uses text
-            StringBuilder completeUses = new StringBuilder();
-
-            if (!medicinalProperties.isEmpty() && !medicinalProperties.equals("Information not available")) {
-                completeUses.append("Medicinal Properties: ").append(medicinalProperties).append("\n\n");
-            }
-
-            if (!uses.isEmpty() && !uses.equals("Uses to be researched")) {
-                completeUses.append("Traditional Uses: ").append(uses).append("\n\n");
-            }
-
-            if (completeUses.length() == 0) {
-                completeUses.append("Plant information available from knowledge database.");
-            }
-
-            // Pass data to ResultActivity
-            intent.putExtra("plantName", plantName);
-            intent.putExtra("scientificName", scientificName);
-            intent.putExtra("family", family);
-            intent.putExtra("habitat", habitat);
-            intent.putExtra("topPlantUses", completeUses.toString());
-            intent.putExtra("confidence", 0.95); // High confidence for database results
-            intent.putExtra("isRealIdentification", false); // This is from database search
-            intent.putExtra("isFromSearchRoute", false);
-
-            startActivity(intent);
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error showing plant details: " + e.getMessage());
-            Toast.makeText(this, "Error opening plant details", Toast.LENGTH_SHORT).show();
         }
     }
 

@@ -126,14 +126,6 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="🌐 Data sources: Wikipedia, GBIF, Knowledge Graph"
-            android:textSize="12sp"
-            android:textColor="?attr/colorOnSurfaceVariant"
-            android:gravity="center" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
             android:text="Tap on any result to view detailed information"
             android:textSize="11sp"
             android:textColor="?attr/colorOnSurfaceVariant"
