@@ -349,6 +349,8 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Replace the uploadImage() method in MainActivity with this improved version
+
     private void uploadImage() {
         if (imageUri == null && imageView.getDrawable() == null) {
             Toast.makeText(this, "Please select or capture an image first!", Toast.LENGTH_SHORT).show();
@@ -371,6 +373,7 @@ public class MainActivity extends AppCompatActivity {
                     return;
                 }
 
+                // Step 1: Call /predict endpoint for plant identification
                 RequestBody requestBody = new MultipartBody.Builder()
                         .setType(MultipartBody.FORM)
                         .addFormDataPart("file", imageFile.getName(),
@@ -385,343 +388,78 @@ public class MainActivity extends AppCompatActivity {
                 client.newCall(request).enqueue(new Callback() {
                     @Override
                     public void onFailure(Call call, IOException e) {
-                        Log.e(TAG, "Upload failed: " + e.getMessage());
+                        Log.e(TAG, "Prediction failed: " + e.getMessage());
                         mainHandler.post(() -> {
                             loadingDialog.dismiss();
-                            Toast.makeText(MainActivity.this, "Upload failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                            Toast.makeText(MainActivity.this, "Prediction failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
                             showDummyResults();
                         });
                     }
 
-
-                    // Replace the onResponse method in your MainActivity with this fixed version:
                     @Override
                     public void onResponse(Call call, Response response) throws IOException {
                         String responseBody = response.body().string();
-                        Log.d(TAG, "Server response: " + responseBody);
+                        Log.d(TAG, "=== PREDICTION RESPONSE ===");
+                        Log.d(TAG, responseBody);
 
-                        mainHandler.post(() -> {
-                            loadingDialog.dismiss();
+                        try {
+                            JSONObject jsonResponse = new JSONObject(responseBody);
 
-                            try {
-                                JSONObject jsonResponse = new JSONObject(responseBody);
-
-                                if (jsonResponse.has("error")) {
-                                    String errorMessage = jsonResponse.getString("error");
-                                    Log.e(TAG, "Prediction error: " + errorMessage);
+                            // Check for error
+                            if (jsonResponse.has("error")) {
+                                String errorMessage = jsonResponse.getString("error");
+                                Log.e(TAG, "Prediction error: " + errorMessage);
+                                mainHandler.post(() -> {
+                                    loadingDialog.dismiss();
                                     Toast.makeText(MainActivity.this, "Prediction error: " + errorMessage, Toast.LENGTH_SHORT).show();
                                     showDummyResults();
-                                    return;
-                                }
-
-                                // Check if this is a successful plant identification response
-                                if (jsonResponse.has("species") && jsonResponse.has("confidence")) {
-                                    handlePlantIdentificationResponse(jsonResponse);
-                                } else if (jsonResponse.has("results") && jsonResponse.has("success")) {
-                                    // **FIXED: Handle knowledge graph results properly**
-                                    handleKnowledgeGraphResponse(jsonResponse);
-                                } else {
-                                    Log.w(TAG, "Unexpected response format: " + responseBody);
-                                    showDummyResults();
-                                }
-
-                            } catch (JSONException e) {
-                                Log.e(TAG, "Error parsing response: " + e.getMessage());
-                                Toast.makeText(MainActivity.this, "Error parsing response", Toast.LENGTH_SHORT).show();
-                                showDummyResults();
-                            }
-                        });
-                    }
-
-                    /**
-                     * NEW METHOD: Handle plant identification from ML model
-                     */
-                    private void handlePlantIdentificationResponse(JSONObject jsonResponse) {
-                        try {
-                            String topSpecies = jsonResponse.getString("species");
-                            double confidence = jsonResponse.getDouble("confidence");
-
-                            Log.d(TAG, "Identified species: " + topSpecies + " with confidence: " + confidence);
-
-                            // Get additional plant information if available
-                            String family = jsonResponse.optString("family", "Unknown family");
-                            String scientificName = jsonResponse.optString("scientific_name", topSpecies);
-                            String commonNames = jsonResponse.optString("common_names", topSpecies);
-                            String uses = jsonResponse.optString("medicinal_properties", "Information not available");
-                            String habitat = jsonResponse.optString("habitat", "Various environments");
-
-                            // Extract database information from JSON response
-                            String databaseUses = jsonResponse.optString("uses", "");
-                            String databaseMedicinalProperties = jsonResponse.optString("medicinal_properties", "");
-                            String databaseChemicalComponents = jsonResponse.optString("chemical_components", "");
-
-                            // Extract image URLs from MongoDB response
-                            ArrayList<String> dbImageUrls = new ArrayList<>();
-                            if (jsonResponse.has("db_image_urls")) {
-                                JSONArray imageUrlArray = jsonResponse.getJSONArray("db_image_urls");
-                                for (int i = 0; i < imageUrlArray.length(); i++) {
-                                    dbImageUrls.add(imageUrlArray.getString(i));
-                                }
-                                Log.d(TAG, "Found " + dbImageUrls.size() + " database images for " + topSpecies);
-                            }
-
-                            // Extract images from db_matches
-                            if (jsonResponse.has("db_matches")) {
-                                JSONArray dbMatches = jsonResponse.getJSONArray("db_matches");
-                                for (int i = 0; i < dbMatches.length(); i++) {
-                                    JSONObject match = dbMatches.getJSONObject(i);
-                                    if (match.has("image_urls")) {
-                                        JSONArray matchImages = match.getJSONArray("image_urls");
-                                        for (int j = 0; j < matchImages.length(); j++) {
-                                            String imageUrl = matchImages.getString(j);
-                                            if (!dbImageUrls.contains(imageUrl)) {
-                                                dbImageUrls.add(imageUrl);
-                                            }
-                                        }
-                                    }
-                                }
-                                Log.d(TAG, "Total images after db_matches: " + dbImageUrls.size());
-                            }
-
-                            // Get top predictions for probable plants
-                            ArrayList<String> probablePlants = new ArrayList<>();
-                            JSONArray topPredictions = jsonResponse.optJSONArray("top_predictions");
-
-                            if (topPredictions != null && topPredictions.length() > 0) {
-                                for (int i = 0; i < Math.min(5, topPredictions.length()); i++) {
-                                    JSONObject prediction = topPredictions.getJSONObject(i);
-                                    String species = prediction.getString("species");
-                                    double predConfidence = prediction.getDouble("confidence");
-                                    probablePlants.add(species + " (" + String.format("%.1f", predConfidence * 100) + "%)");
-                                }
-                            } else {
-                                probablePlants.add(topSpecies + " (" + String.format("%.1f", confidence * 100) + "%)");
-                            }
-
-                            // Start ResultActivity with comprehensive plant data
-                            Intent intent = new Intent(MainActivity.this, ResultActivity.class);
-                            intent.putStringArrayListExtra("probablePlants", probablePlants);
-                            intent.putStringArrayListExtra("dbImageUrls", dbImageUrls);
-                            intent.putExtra("topPlantUses", uses);
-                            intent.putExtra("confidence", confidence);
-                            intent.putExtra("plantName", commonNames);
-                            intent.putExtra("scientificName", scientificName);
-                            intent.putExtra("family", family);
-                            intent.putExtra("habitat", habitat);
-                            intent.putExtra("isRealIdentification", true);
-                            intent.putExtra("isFromSearchRoute", true);
-                            intent.putExtra("hasDbImages", !dbImageUrls.isEmpty());
-                            intent.putExtra("databaseUses", databaseUses);
-                            intent.putExtra("databaseMedicinalProperties", databaseMedicinalProperties);
-                            intent.putExtra("databaseChemicalComponents", databaseChemicalComponents);
-
-                            startActivity(intent);
-
-                        } catch (Exception e) {
-                            Log.e(TAG, "Error handling plant identification response: " + e.getMessage());
-                            showDummyResults();
-                        }
-                    }
-
-                    /**
-                     * NEW METHOD: Handle knowledge graph results with priority to knowledge graph data
-                     */
-                    private void handleKnowledgeGraphResponse(JSONObject jsonResponse) {
-                        try {
-                            JSONArray results = jsonResponse.getJSONArray("results");
-                            if (results.length() == 0) {
-                                Log.w(TAG, "No results in knowledge graph response");
-                                showDummyResults();
+                                });
                                 return;
                             }
 
-                            Log.d(TAG, "Processing knowledge graph response with " + results.length() + " results");
+                            // Extract plant name from prediction response
+                            String identifiedPlantName = "";
+                            double confidence = 0.0;
+                            ArrayList<String> topPredictions = new ArrayList<>();
 
-                            // **PRIORITY 1: Find knowledge graph entries (auto_generated = null or false)**
-                            JSONObject knowledgeGraphResult = findKnowledgeGraphEntry(results);
+                            if (jsonResponse.has("species")) {
+                                identifiedPlantName = jsonResponse.getString("species");
+                                confidence = jsonResponse.optDouble("confidence", 0.0);
 
-                            if (knowledgeGraphResult != null) {
-                                Log.d(TAG, "Found knowledge graph entry - using it directly");
-                                processKnowledgeGraphResult(knowledgeGraphResult, results);
-                            } else {
-                                // **PRIORITY 2: Find any result with meaningful uses**
-                                JSONObject bestResult = findResultWithMeaningfulUses(results);
-                                if (bestResult != null) {
-                                    Log.d(TAG, "Found result with meaningful uses");
-                                    processKnowledgeGraphResult(bestResult, results);
-                                } else {
-                                    Log.w(TAG, "No meaningful results found - using fallback");
-                                    showDummyResults();
-                                }
-                            }
-
-                        } catch (Exception e) {
-                            Log.e(TAG, "Error handling knowledge graph response: " + e.getMessage());
-                            showDummyResults();
-                        }
-                    }
-
-                    /**
-                     * NEW METHOD: Find authentic knowledge graph entries (not auto-generated)
-                     */
-                    private JSONObject findKnowledgeGraphEntry(JSONArray results) {
-                        try {
-                            for (int i = 0; i < results.length(); i++) {
-                                JSONObject result = results.getJSONObject(i);
-
-                                // Check if this is a knowledge graph entry (not auto-generated)
-                                boolean autoGenerated = result.optBoolean("auto_generated", false);
-                                String dataSource = result.optString("data_source", "");
-
-                                // Prioritize non-auto-generated entries from knowledge graph
-                                if (!autoGenerated || dataSource.isEmpty()) {
-                                    String uses = result.optString("uses", "").trim();
-
-                                    // Must have meaningful uses to be considered
-                                    if (!uses.isEmpty() && !isGenericUses(uses)) {
-                                        Log.d(TAG, "Found knowledge graph entry: " + result.optString("plant_name", "Unknown"));
-                                        Log.d(TAG, "Uses preview: " + uses.substring(0, Math.min(uses.length(), 100)));
-                                        return result;
+                                // Extract top predictions for backup
+                                if (jsonResponse.has("top_predictions")) {
+                                    JSONArray predictions = jsonResponse.getJSONArray("top_predictions");
+                                    for (int i = 0; i < Math.min(3, predictions.length()); i++) {
+                                        JSONObject pred = predictions.getJSONObject(i);
+                                        String species = pred.optString("species", "");
+                                        double predConf = pred.optDouble("confidence", 0.0);
+                                        topPredictions.add(species + " (" + String.format("%.1f", predConf * 100) + "%)");
                                     }
                                 }
+                            } else {
+                                Log.e(TAG, "No species found in prediction response");
+                                mainHandler.post(() -> {
+                                    loadingDialog.dismiss();
+                                    Toast.makeText(MainActivity.this, "No plant identified", Toast.LENGTH_SHORT).show();
+                                    showDummyResults();
+                                });
+                                return;
                             }
 
-                            Log.d(TAG, "No authentic knowledge graph entries found");
-                            return null;
+                            Log.d(TAG, "Identified plant: " + identifiedPlantName + " (confidence: " + confidence + ")");
 
-                        } catch (Exception e) {
-                            Log.e(TAG, "Error finding knowledge graph entry: " + e.getMessage());
-                            return null;
-                        }
-                    }
+                            // Step 2: Call /smart_search for detailed information
+                            mainHandler.post(() -> loadingDialog.setLoadingText("Fetching plant details..."));
 
-                    /**
-                     * NEW METHOD: Find any result with meaningful uses (fallback)
-                     */
-                    private JSONObject findResultWithMeaningfulUses(JSONArray results) {
-                        try {
-                            JSONObject bestResult = null;
-                            int bestUsesLength = 0;
+                            fetchDetailedPlantInfo(identifiedPlantName, confidence, topPredictions);
 
-                            for (int i = 0; i < results.length(); i++) {
-                                JSONObject result = results.getJSONObject(i);
-                                String uses = result.optString("uses", "").trim();
-
-                                if (!uses.isEmpty() && !isGenericUses(uses) && uses.length() > bestUsesLength) {
-                                    bestResult = result;
-                                    bestUsesLength = uses.length();
-                                    Log.d(TAG, "Better uses found (" + uses.length() + " chars): " +
-                                            result.optString("plant_name", "Unknown"));
-                                }
-                            }
-
-                            return bestResult;
-
-                        } catch (Exception e) {
-                            Log.e(TAG, "Error finding result with meaningful uses: " + e.getMessage());
-                            return null;
-                        }
-                    }
-
-                    /**
-                     * NEW METHOD: Check if uses text is generic/meaningless
-                     */
-                    private boolean isGenericUses(String uses) {
-                        if (uses == null || uses.length() < 15) {
-                            return true;
-                        }
-
-                        String lowerUses = uses.toLowerCase();
-
-                        // Filter out generic phrases
-                        String[] genericPhrases = {
-                                "traditional and ornamental uses",
-                                "uses to be researched",
-                                "information not available",
-                                "under research",
-                                "not available",
-                                "a rose is either",
-                                "they form"
-                        };
-
-                        for (String phrase : genericPhrases) {
-                            if (lowerUses.contains(phrase)) {
-                                return true;
-                            }
-                        }
-
-                        return false;
-                    }
-
-                    /**
-                     * NEW METHOD: Process the selected knowledge graph result
-                     */
-                    private void processKnowledgeGraphResult(JSONObject selectedResult, JSONArray allResults) {
-                        try {
-                            // Extract information from the selected result
-                            String plantName = selectedResult.optString("plant_name", "Unknown Plant");
-                            String scientificName = selectedResult.optString("scientific_name", "Unknown");
-                            String family = selectedResult.optString("family", "Unknown family");
-                            String habitat = selectedResult.optString("habitat", "Various environments");
-                            String databaseUses = selectedResult.optString("uses", "");
-                            String databaseMedicinalProperties = selectedResult.optString("medicinal_properties", "");
-                            String databaseChemicalComponents = selectedResult.optString("chemical_components", "");
-                            boolean autoGenerated = selectedResult.optBoolean("auto_generated", false);
-
-                            Log.d(TAG, "Processing selected result:");
-                            Log.d(TAG, "Plant: " + plantName);
-                            Log.d(TAG, "Uses length: " + databaseUses.length());
-                            Log.d(TAG, "Auto-generated: " + autoGenerated);
-
-                            // Extract image URLs from the selected result
-                            ArrayList<String> dbImageUrls = new ArrayList<>();
-                            if (selectedResult.has("image_urls")) {
-                                JSONArray imageUrlArray = selectedResult.getJSONArray("image_urls");
-                                for (int i = 0; i < imageUrlArray.length(); i++) {
-                                    dbImageUrls.add(imageUrlArray.getString(i));
-                                }
-                            }
-
-                            // Build probable plants list from all results
-                            ArrayList<String> probablePlants = new ArrayList<>();
-                            for (int i = 0; i < Math.min(5, allResults.length()); i++) {
-                                JSONObject result = allResults.getJSONObject(i);
-                                String name = result.optString("plant_name", "Unknown");
-                                boolean isAutoGen = result.optBoolean("auto_generated", false);
-
-                                if (i == 0 || !isAutoGen) {
-                                    probablePlants.add(name + (isAutoGen ? " (API)" : " (Database)"));
-                                }
-                            }
-
-                            // **KEY FIX: Pass the database information directly to ResultActivity**
-                            Intent intent = new Intent(MainActivity.this, ResultActivity.class);
-                            intent.putStringArrayListExtra("probablePlants", probablePlants);
-                            intent.putStringArrayListExtra("dbImageUrls", dbImageUrls);
-                            intent.putExtra("confidence", autoGenerated ? 0.75 : 0.85); // Lower confidence for API data
-                            intent.putExtra("plantName", plantName);
-                            intent.putExtra("scientificName", scientificName);
-                            intent.putExtra("family", family);
-                            intent.putExtra("habitat", habitat);
-                            intent.putExtra("isRealIdentification", true);
-                            intent.putExtra("hasDbImages", !dbImageUrls.isEmpty());
-
-                            // **CRITICAL: Pass the database uses directly - don't let ResultActivity fetch again**
-                            intent.putExtra("databaseUses", databaseUses);
-                            intent.putExtra("databaseMedicinalProperties", databaseMedicinalProperties);
-                            intent.putExtra("databaseChemicalComponents", databaseChemicalComponents);
-                            intent.putExtra("topPlantUses", databaseUses); // This ensures it's displayed immediately
-
-                            // **NEW: Add flag to prevent API fetching**
-                            intent.putExtra("hasKnowledgeGraphData", true);
-                            intent.putExtra("dataSource", autoGenerated ? "API" : "Knowledge Graph");
-
-                            Log.d(TAG, "Starting ResultActivity with knowledge graph data");
-                            startActivity(intent);
-
-                        } catch (Exception e) {
-                            Log.e(TAG, "Error processing knowledge graph result: " + e.getMessage());
-                            showDummyResults();
+                        } catch (JSONException e) {
+                            Log.e(TAG, "Error parsing prediction response: " + e.getMessage());
+                            mainHandler.post(() -> {
+                                loadingDialog.dismiss();
+                                Toast.makeText(MainActivity.this, "Error parsing prediction response", Toast.LENGTH_SHORT).show();
+                                showDummyResults();
+                            });
                         }
                     }
                 });
@@ -736,7 +474,192 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
+    // Replace the fetchDetailedPlantInfo method in MainActivity with this fixed version
+    private void fetchDetailedPlantInfo(String plantName, double confidence, ArrayList<String> fallbackPredictions) {
+        try {
+            // Use %20 encoding instead of + encoding for spaces
+            String encodedPlantName = plantName.replace(" ", "%20");
+            String smartSearchUrl = BASE_URL + "smart_search/" + encodedPlantName;
 
+            Log.d(TAG, "Original plant name: " + plantName);
+            Log.d(TAG, "Encoded plant name: " + encodedPlantName);
+            Log.d(TAG, "Fetching details from: " + smartSearchUrl);
+
+            Request request = new Request.Builder()
+                    .url(smartSearchUrl)
+                    .get()
+                    .build();
+
+            client.newCall(request).enqueue(new Callback() {
+                @Override
+                public void onFailure(Call call, IOException e) {
+                    Log.e(TAG, "Smart search failed: " + e.getMessage());
+                    mainHandler.post(() -> {
+                        loadingDialog.dismiss();
+                        // Show results with limited info from prediction
+                        showLimitedResults(plantName, confidence, fallbackPredictions);
+                    });
+                }
+
+                @Override
+                public void onResponse(Call call, Response response) throws IOException {
+                    String responseBody = response.body().string();
+                    Log.d(TAG, "=== SMART SEARCH RESPONSE ===");
+                    Log.d(TAG, "Response code: " + response.code());
+                    Log.d(TAG, "Response body: " + responseBody);
+
+                    mainHandler.post(() -> {
+                        loadingDialog.dismiss();
+                        processSmartSearchResponse(responseBody, plantName, confidence, fallbackPredictions);
+                    });
+                }
+            });
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error in smart search request: " + e.getMessage());
+            mainHandler.post(() -> {
+                loadingDialog.dismiss();
+                showLimitedResults(plantName, confidence, fallbackPredictions);
+            });
+        }
+    }
+    // Process the smart_search response and launch ResultActivity
+    private void processSmartSearchResponse(String responseBody, String fallbackPlantName, double confidence, ArrayList<String> fallbackPredictions) {
+        try {
+            JSONObject jsonResponse = new JSONObject(responseBody);
+
+            // Check for success
+            if (!jsonResponse.has("success") || !jsonResponse.getBoolean("success")) {
+                Log.w(TAG, "Smart search was not successful");
+                showLimitedResults(fallbackPlantName, confidence, fallbackPredictions);
+                return;
+            }
+
+            // Extract results array
+            if (!jsonResponse.has("results")) {
+                Log.w(TAG, "No results in smart search response");
+                showLimitedResults(fallbackPlantName, confidence, fallbackPredictions);
+                return;
+            }
+
+            JSONArray results = jsonResponse.getJSONArray("results");
+            if (results.length() == 0) {
+                Log.w(TAG, "Empty results array");
+                showLimitedResults(fallbackPlantName, confidence, fallbackPredictions);
+                return;
+            }
+
+            // Extract data from the first (and should be only) result
+            JSONObject plantData = results.getJSONObject(0);
+
+            Log.d(TAG, "=== EXTRACTING PLANT DATA ===");
+
+            // Extract all available fields with fallbacks
+            String plantName = extractPlantField(plantData, "plant_name", fallbackPlantName);
+            String scientificName = extractPlantField(plantData, "scientific_name", plantName);
+            String family = extractPlantField(plantData, "family", "");
+            String habitat = extractPlantField(plantData, "habitat", "");
+            String uses = extractPlantField(plantData, "uses", "");
+            String medicinalProperties = extractPlantField(plantData, "medicinal_properties", "");
+            String chemicalComponents = extractPlantField(plantData, "chemical_components", "");
+
+            // Create probable plants list (include original predictions as fallback)
+            ArrayList<String> probablePlants = new ArrayList<>();
+            probablePlants.add(plantName);
+
+            // Add fallback predictions if we have them
+            if (fallbackPredictions != null && !fallbackPredictions.isEmpty()) {
+                for (String pred : fallbackPredictions) {
+                    if (!probablePlants.contains(pred)) {
+                        probablePlants.add(pred);
+                    }
+                }
+            }
+
+            // Log extracted values
+            Log.d(TAG, "Final plant name: '" + plantName + "'");
+            Log.d(TAG, "Final scientific name: '" + scientificName + "'");
+            Log.d(TAG, "Final family: '" + family + "'");
+            Log.d(TAG, "Final habitat: '" + habitat + "'");
+            Log.d(TAG, "Final uses: '" + uses + "'");
+
+            // Create and start ResultActivity
+            Intent intent = new Intent(MainActivity.this, ResultActivity.class);
+            intent.putExtra("plantName", plantName);
+            intent.putExtra("scientificName", scientificName);
+            intent.putExtra("family", family);
+            intent.putExtra("habitat", habitat);
+            intent.putExtra("uses", uses);
+            intent.putExtra("confidence", confidence);
+            intent.putExtra("isRealIdentification", true);
+            intent.putExtra("isFromSearchRoute", false);
+            intent.putExtra("hasDbImages", false);
+
+            // Database information
+            intent.putExtra("databaseUses", uses);
+            intent.putExtra("databaseMedicinalProperties", medicinalProperties);
+            intent.putExtra("databaseChemicalComponents", chemicalComponents);
+
+            intent.putStringArrayListExtra("dbImageUrls", new ArrayList<String>());
+            intent.putStringArrayListExtra("probablePlants", probablePlants);
+
+            startActivity(intent);
+
+        } catch (JSONException e) {
+            Log.e(TAG, "Error parsing smart search response: " + e.getMessage());
+            e.printStackTrace();
+            showLimitedResults(fallbackPlantName, confidence, fallbackPredictions);
+        } catch (Exception e) {
+            Log.e(TAG, "Unexpected error processing smart search: " + e.getMessage());
+            e.printStackTrace();
+            showLimitedResults(fallbackPlantName, confidence, fallbackPredictions);
+        }
+    }
+
+    // Helper method to extract plant field with validation
+    private String extractPlantField(JSONObject plantData, String fieldName, String fallback) {
+        String value = plantData.optString(fieldName, "").trim();
+
+        // Check if value is meaningful
+        if (value.isEmpty() ||
+                value.equals("null") ||
+                value.equals("NULL") ||
+                value.equals("None") ||
+                value.equals("Unknown")) {
+
+            Log.d(TAG, "Field '" + fieldName + "' is empty/null, using fallback: '" + fallback + "'");
+            return fallback;
+        }
+
+        Log.d(TAG, "Field '" + fieldName + "': '" + value + "'");
+        return value;
+    }
+
+    // Show results with limited information when smart search fails
+    private void showLimitedResults(String plantName, double confidence, ArrayList<String> probablePlants) {
+        Log.d(TAG, "Showing limited results for: " + plantName);
+
+        Intent intent = new Intent(MainActivity.this, ResultActivity.class);
+        intent.putExtra("plantName", plantName);
+        intent.putExtra("scientificName", plantName);
+        intent.putExtra("family", "");
+        intent.putExtra("habitat", "");
+        intent.putExtra("uses", "Detailed information is being fetched. Please use 'Search More' for additional details.");
+        intent.putExtra("confidence", confidence);
+        intent.putExtra("isRealIdentification", true);
+        intent.putExtra("isFromSearchRoute", false);
+        intent.putExtra("hasDbImages", false);
+
+        // Empty database information
+        intent.putExtra("databaseUses", "");
+        intent.putExtra("databaseMedicinalProperties", "");
+        intent.putExtra("databaseChemicalComponents", "");
+
+        intent.putStringArrayListExtra("dbImageUrls", new ArrayList<String>());
+        intent.putStringArrayListExtra("probablePlants", probablePlants != null ? probablePlants : new ArrayList<String>());
+
+        startActivity(intent);
+    }
     private File createTempFileFromUri(Uri uri) {
         try {
             if (uri == null) return null;

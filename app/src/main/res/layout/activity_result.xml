@@ -99,7 +99,7 @@
                     android:id="@+id/familyTextView"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Family: Unknown"
+                    android:text="Family"
                     android:textSize="14sp"
                     android:textColor="?android:attr/textColorSecondary"
                     android:paddingBottom="4dp" />
@@ -109,7 +109,7 @@
                     android:id="@+id/habitatTextView"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Habitat: Various environments"
+                    android:text="Habitat"
                     android:textSize="14sp"
                     android:textColor="?android:attr/textColorSecondary"
                     android:paddingBottom="8dp" />
@@ -125,8 +125,6 @@
                     android:textColor="@android:color/holo_green_dark"
                     android:background="@android:color/transparent"
                     android:padding="8dp" />
-                <!-- Add this button to your existing activity_result.xml layout -->
-                <!-- Place it in an appropriate location, for example after the searchMoreButton -->
 
                 <Button
                     android:id="@+id/viewImagesButton"
