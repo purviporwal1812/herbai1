@@ -7,12 +7,19 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.ImageDecoder;
+import java.io.FileNotFoundException;
+import android.os.Environment;
 import android.net.Uri;
 import android.os.Build;
+import java.util.concurrent.TimeUnit;
+
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.MediaStore;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
@@ -57,6 +64,7 @@ import okhttp3.Response;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
+
     private SwitchMaterial themeSwitch;
     private SharedPreferences sharedPreferences;
     private static final String PREFS_NAME = "theme_prefs";
@@ -74,6 +82,7 @@ public class MainActivity extends AppCompatActivity {
     // Menu components
     private FloatingActionButton menuFab;
     private LinearLayout menuLayout;
+    private File cameraImageFile;
     private boolean isMenuVisible = false;
 
     // Network client
@@ -95,7 +104,14 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         // Initialize network client
-        client = new OkHttpClient();
+        // Initialize network client with extended timeouts for ML prediction
+        client = new OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)      // Time to establish connection
+                .readTimeout(60, TimeUnit.SECONDS)         // Time to read response (important for ML predictions)
+                .writeTimeout(30, TimeUnit.SECONDS)        // Time to upload image
+                .retryOnConnectionFailure(true)            // Retry on connection failures
+                .build();
+
 
         // Initialize loading dialog
         loadingDialog = new LoadingDialog(this);
@@ -142,19 +158,38 @@ public class MainActivity extends AppCompatActivity {
                     }
                 });
 
-        // Capture Image using Camera
+// In setupImageLaunchers() method
         cameraLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
-                    Log.d(TAG, "Camera result: " + result.getResultCode());
+                    Log.d(TAG, "Camera result code: " + result.getResultCode());
                     if (result.getResultCode() == Activity.RESULT_OK) {
-                        if (cameraImageUri != null) {
-                            imageUri = cameraImageUri; // Set imageUri to the captured image
-                            displayImage(cameraImageUri);
-                            Log.d(TAG, "Image captured: " + cameraImageUri.toString());
+                        if (cameraImageUri != null && cameraImageFile != null) {
+                            // Wait a moment for the file to be fully written
+                            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                                // Verify the file exists and has content
+                                if (cameraImageFile.exists() && cameraImageFile.length() > 0) {
+                                    imageUri = cameraImageUri;
+                                    displayImage(cameraImageUri);
+                                    Log.d(TAG, "Image captured successfully: " + cameraImageUri.toString());
+                                    Log.d(TAG, "Camera file size: " + cameraImageFile.length() + " bytes");
+                                } else {
+                                    Log.e(TAG, "Camera image file is empty or doesn't exist");
+                                    Log.e(TAG, "File exists: " + cameraImageFile.exists());
+                                    Log.e(TAG, "File size: " + cameraImageFile.length());
+                                    Toast.makeText(this, "Error: Camera image not saved properly", Toast.LENGTH_SHORT).show();
+                                }
+                            }, 500); // Wait 500ms for file to be written
+                        } else {
+                            Log.e(TAG, "cameraImageUri or cameraImageFile is null");
+                            Toast.makeText(this, "Error: Image URI is null", Toast.LENGTH_SHORT).show();
                         }
+                    } else {
+                        Log.w(TAG, "Camera cancelled or failed, result code: " + result.getResultCode());
                     }
                 });
+
+
     }
 
     private void setupThemeSwitch() {
@@ -280,49 +315,47 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "Error opening gallery: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
-
-    private void captureImage() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissionLauncher.launch(Manifest.permission.CAMERA);
-            return;
-        }
-
-        try {
-            // Create the image file
-            File imageFile = new File(getExternalFilesDir("Pictures"), "captured_image_" + System.currentTimeMillis() + ".jpg");
-
-            // Create directories if they don't exist
-            File parentDir = imageFile.getParentFile();
-            if (parentDir != null && !parentDir.exists()) {
-                parentDir.mkdirs();
+        private void captureImage() {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissionLauncher.launch(Manifest.permission.CAMERA);
+                return;
             }
 
-            // Create the file
-            if (!imageFile.exists()) {
-                imageFile.createNewFile();
-            }
+            try {
+                String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
+                String imageFileName = "JPEG_" + timeStamp + "_";
+                File storageDir = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
 
-            cameraImageUri = FileProvider.getUriForFile(this, "com.example.herbai.fileprovider", imageFile);
+                File imageFile = File.createTempFile(
+                        imageFileName,
+                        ".jpg",
+                        storageDir
+                );
 
-            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-            intent.putExtra(MediaStore.EXTRA_OUTPUT, cameraImageUri);
+                // Store the file reference
+                cameraImageFile = imageFile;  // ← ADD THIS LINE
 
-            // Grant URI permission
-            intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                cameraImageUri = FileProvider.getUriForFile(
+                        this,
+                        "com.example.herbai.fileprovider",
+                        imageFile
+                );
 
-            if (intent.resolveActivity(getPackageManager()) != null) {
+                Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                intent.putExtra(MediaStore.EXTRA_OUTPUT, cameraImageUri);
+                intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
                 cameraLauncher.launch(intent);
                 Log.d(TAG, "Camera intent launched, URI: " + cameraImageUri.toString());
-            } else {
-                Toast.makeText(this, "No camera app found", Toast.LENGTH_SHORT).show();
+                Log.d(TAG, "Camera file path: " + imageFile.getAbsolutePath());  // ← ADD THIS LINE
+
+            } catch (IOException e) {
+                Log.e(TAG, "Error creating image file: " + e.getMessage());
+                e.printStackTrace();
+                Toast.makeText(this, "Error creating image file: " + e.getMessage(), Toast.LENGTH_LONG).show();
             }
-        } catch (Exception e) {
-            Log.e(TAG, "Error capturing image: " + e.getMessage());
-            e.printStackTrace();
-            Toast.makeText(this, "Error capturing image: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
-    }
 
     private void displayImage(Uri uri) {
         try {
@@ -349,7 +382,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // Replace the uploadImage() method in MainActivity with this improved version
 
     private void uploadImage() {
         if (imageUri == null && imageView.getDrawable() == null) {
@@ -362,9 +394,51 @@ public class MainActivity extends AppCompatActivity {
 
         executor.execute(() -> {
             try {
-                File imageFile = createTempFileFromUri(imageUri);
+                File imageFile;
+
+                // Check if this is a camera image
+                if (cameraImageFile != null && cameraImageFile.exists() &&
+                        imageUri != null && imageUri.equals(cameraImageUri)) {
+
+                    // VALIDATE CAMERA FILE
+                    if (!cameraImageFile.exists()) {
+                        Log.e(TAG, "Camera file does not exist: " + cameraImageFile.getAbsolutePath());
+                        mainHandler.post(() -> {
+                            loadingDialog.dismiss();
+                            Toast.makeText(MainActivity.this, "Error: Camera image file not found", Toast.LENGTH_SHORT).show();
+                        });
+                        return;
+                    }
+
+                    if (cameraImageFile.length() == 0) {
+                        Log.e(TAG, "Camera file is empty: " + cameraImageFile.getAbsolutePath());
+                        mainHandler.post(() -> {
+                            loadingDialog.dismiss();
+                            Toast.makeText(MainActivity.this, "Error: Camera image is empty", Toast.LENGTH_SHORT).show();
+                        });
+                        return;
+                    }
+
+                    if (!cameraImageFile.canRead()) {
+                        Log.e(TAG, "Cannot read camera file: " + cameraImageFile.getAbsolutePath());
+                        mainHandler.post(() -> {
+                            loadingDialog.dismiss();
+                            Toast.makeText(MainActivity.this, "Error: Cannot read camera image", Toast.LENGTH_SHORT).show();
+                        });
+                        return;
+                    }
+
+                    imageFile = cameraImageFile;
+                    Log.d(TAG, "Using original camera file: " + imageFile.getAbsolutePath());
+                    Log.d(TAG, "Camera file size: " + imageFile.length() + " bytes");
+                    Log.d(TAG, "Camera file readable: " + imageFile.canRead());
+                } else {
+                    // For gallery images, create temp file as before
+                    imageFile = createTempFileFromUri(imageUri);
+                }
 
                 if (imageFile == null || !imageFile.exists()) {
+                    Log.e(TAG, "Final image file is null or doesn't exist");
                     mainHandler.post(() -> {
                         loadingDialog.dismiss();
                         Toast.makeText(MainActivity.this, "Error preparing image file", Toast.LENGTH_SHORT).show();
@@ -372,6 +446,22 @@ public class MainActivity extends AppCompatActivity {
                     });
                     return;
                 }
+
+                if (imageFile.length() == 0) {
+                    Log.e(TAG, "Final image file is empty");
+                    mainHandler.post(() -> {
+                        loadingDialog.dismiss();
+                        Toast.makeText(MainActivity.this, "Error: Image file is empty", Toast.LENGTH_SHORT).show();
+                        showDummyResults();
+                    });
+                    return;
+                }
+
+                Log.d(TAG, "=== UPLOADING IMAGE ===");
+                Log.d(TAG, "File path: " + imageFile.getAbsolutePath());
+                Log.d(TAG, "File size: " + imageFile.length() + " bytes");
+                Log.d(TAG, "File readable: " + imageFile.canRead());
+                Log.d(TAG, "File name: " + imageFile.getName());
 
                 // Step 1: Call /predict endpoint for plant identification
                 RequestBody requestBody = new MultipartBody.Builder()
@@ -385,13 +475,17 @@ public class MainActivity extends AppCompatActivity {
                         .post(requestBody)
                         .build();
 
+                Log.d(TAG, "Sending request to: " + BASE_URL + "predict");
+
                 client.newCall(request).enqueue(new Callback() {
                     @Override
                     public void onFailure(Call call, IOException e) {
                         Log.e(TAG, "Prediction failed: " + e.getMessage());
+                        Log.e(TAG, "Exception class: " + e.getClass().getName());
+                        e.printStackTrace();
                         mainHandler.post(() -> {
                             loadingDialog.dismiss();
-                            Toast.makeText(MainActivity.this, "Prediction failed: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                            Toast.makeText(MainActivity.this, "Prediction failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
                             showDummyResults();
                         });
                     }
@@ -399,6 +493,12 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void onResponse(Call call, Response response) throws IOException {
                         String responseBody = response.body().string();
+                        Log.d(TAG, "=== PREDICTION RESPONSE ===");
+                        Log.d(TAG, "Response code: " + response.code());
+                        Log.d(TAG, responseBody);
+
+                        // ... rest of your response handling code
+
                         Log.d(TAG, "=== PREDICTION RESPONSE ===");
                         Log.d(TAG, responseBody);
 
@@ -474,6 +574,12 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
+
+
+
+
+
+
     // Replace the fetchDetailedPlantInfo method in MainActivity with this fixed version
     private void fetchDetailedPlantInfo(String plantName, double confidence, ArrayList<String> fallbackPredictions) {
         try {
@@ -660,26 +766,59 @@ public class MainActivity extends AppCompatActivity {
 
         startActivity(intent);
     }
+
+
+
     private File createTempFileFromUri(Uri uri) {
         try {
-            if (uri == null) return null;
+            if (uri == null) {
+                Log.e(TAG, "URI is null");
+                return null;
+            }
 
+            Log.d(TAG, "Creating temp file from URI: " + uri.toString());
+            Log.d(TAG, "URI scheme: " + uri.getScheme());
+
+            // CHECK IF THIS IS CAMERA IMAGE - RETURN ORIGINAL FILE
+            if (cameraImageFile != null && cameraImageFile.exists() &&
+                    uri.equals(cameraImageUri)) {
+                Log.d(TAG, "Using original camera file: " + cameraImageFile.getAbsolutePath());
+                Log.d(TAG, "Camera file size: " + cameraImageFile.length());
+                Log.d(TAG, "Camera file can read: " + cameraImageFile.canRead());
+
+                // IMPORTANT: Return the camera file directly, don't copy it!
+                return cameraImageFile;
+            }
+
+            // For gallery images or other content URIs, create a temp file
             File tempFile = new File(getCacheDir(), "temp_image_" + System.currentTimeMillis() + ".jpg");
 
             try (InputStream inputStream = getContentResolver().openInputStream(uri);
                  FileOutputStream outputStream = new FileOutputStream(tempFile)) {
 
-                if (inputStream == null) return null;
+                if (inputStream == null) {
+                    Log.e(TAG, "InputStream is null for URI: " + uri);
+                    return null;
+                }
 
-                byte[] buffer = new byte[4096];
+                byte[] buffer = new byte[8192];
                 int bytesRead;
+                long totalBytesRead = 0;
+
                 while ((bytesRead = inputStream.read(buffer)) != -1) {
                     outputStream.write(buffer, 0, bytesRead);
+                    totalBytesRead += bytesRead;
                 }
 
                 Log.d(TAG, "Temp file created: " + tempFile.getAbsolutePath());
+                Log.d(TAG, "Total bytes copied: " + totalBytesRead);
+
                 return tempFile;
             }
+        } catch (FileNotFoundException e) {
+            Log.e(TAG, "File not found for URI: " + uri);
+            e.printStackTrace();
+            return null;
         } catch (Exception e) {
             Log.e(TAG, "Error creating temp file: " + e.getMessage());
             e.printStackTrace();
@@ -687,7 +826,8 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void showDummyResults() {
+
+private void showDummyResults() {
         ArrayList<String> probablePlants = new ArrayList<>(Arrays.asList(
                 "Tulsi (Holy Basil)", "Neem", "Aloe Vera"
         ));
